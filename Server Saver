@@ -1,0 +1,156 @@
+--================================--
+--     SERVER SAVER — FIXED       --
+--================================--
+local Players          = game:GetService("Players")
+local TeleportService  = game:GetService("TeleportService")
+local HttpService      = game:GetService("HttpService")
+
+local player = Players.LocalPlayer
+local FILE_NAME = "SavedServers_AdminGod_V3.json"
+
+--================================--
+--       SAVE / LOAD SYSTEM       --
+--================================--
+local function saveData(data)
+    if writefile then
+        writefile(FILE_NAME, HttpService:JSONEncode(data))
+    end
+end
+
+local function loadData()
+    if isfile and isfile(FILE_NAME) then
+        local success, result = pcall(function()
+            return HttpService:JSONDecode(readfile(FILE_NAME))
+        end)
+        if success then return result end
+    end
+    return {}
+end
+
+--================================--
+--       LOAD UI LIBRARY          --
+--================================--
+local Library = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/UI%20LIBRARY%20API"
+))()
+
+local Window = Library:CreateWindow("Server Saver", "v1.0")
+
+--================================--
+--       KILL ORIGINAL GUI        --
+--================================--
+pcall(function()
+    local old = game:GetService("CoreGui"):FindFirstChild("ServerManager_Premium")
+    if old then old:Destroy() end
+end)
+
+--================================--
+--       SERVER NAME HELPER       --
+--       Adds #number so each     --
+--       server is unique         --
+--================================--
+local serverMap = {} -- maps display name to index
+
+local function buildServerList()
+    local data = loadData()
+    local names = {}
+    serverMap = {}
+
+    for i, v in ipairs(data) do
+        local displayName = "#" .. i .. " | " .. v.Time
+        table.insert(names, displayName)
+        serverMap[displayName] = i
+    end
+
+    return data, names
+end
+
+--================================--
+--       BUILD GUI                --
+--================================--
+local MainPage = Window:CreatePage("Server Saver")
+
+-- CONTROLS
+local ControlSection = MainPage:CreateSection("Controls")
+
+ControlSection:CreateButton("Save Current Server", function()
+    local data = loadData()
+    local entry = {
+        JobId = game.JobId,
+        PlaceId = game.PlaceId,
+        Time = os.date("%H:%M | %d %b")
+    }
+    table.insert(data, 1, entry)
+    if #data > 20 then table.remove(data, 21) end
+    saveData(data)
+
+    local _, names = buildServerList()
+    serverDropdown:Refresh(names)
+    selectedServer = names[1]
+
+    Window:Notify("Server Saved!")
+end)
+
+ControlSection:CreateButton("Clear History", function()
+    saveData({})
+    serverMap = {}
+    selectedServer = nil
+    serverDropdown:Refresh({})
+    Window:Notify("History Cleared!")
+end)
+
+ControlSection:CreateButton("Refresh List", function()
+    local data, names = buildServerList()
+    serverDropdown:Refresh(names)
+    if #names > 0 then
+        selectedServer = names[1]
+    end
+    Window:Notify("Found " .. #data .. " servers")
+end)
+
+-- SERVER SELECT
+local ServerSection = MainPage:CreateSection("Saved Servers")
+local selectedServer = nil
+
+local data, initialNames = buildServerList()
+
+serverDropdown = ServerSection:CreateDropdown("Server", {
+    List = initialNames,
+    Default = initialNames[1] or "None"
+}, function(value)
+    selectedServer = value
+    Window:Notify("Selected: " .. value)
+end)
+
+-- Set default manually since callback doesn't fire on load
+selectedServer = initialNames[1] or nil
+
+ServerSection:CreateButton("Join Selected Server", function()
+    if not selectedServer or selectedServer == "None" then
+        Window:Notify("No server selected!")
+        return
+    end
+
+    local index = serverMap[selectedServer]
+    if not index then
+        Window:Notify("Server not found! Try refreshing.")
+        return
+    end
+
+    local data = loadData()
+    local server = data[index]
+
+    if not server then
+        Window:Notify("Server data missing!")
+        return
+    end
+
+    Window:Notify("Joining: " .. server.Time)
+    TeleportService:TeleportToPlaceInstance(server.PlaceId, server.JobId, player)
+end)
+
+--================================--
+--             DONE               --
+--================================--
+Window:Notify("Server Saver Loaded!")
+print("Server Saver is live!")
