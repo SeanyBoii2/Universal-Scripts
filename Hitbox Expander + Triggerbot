@@ -1,37 +1,8 @@
---[[
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║               SPOOKALICIOUS V4 — DEVELOPER TEMPLATE                          ║
-║                                                                              ║
-║   This template shows you how to build a full hub using the                  ║
-║   Spookalicious V4 API. It comes pre-loaded with:                            ║
-║                                                                              ║
-║     • Hitbox Expander + TriggerBot pages                                     ║
-║     • Config page   — Save/load settings across sessions                     ║
-║     • Server page   — Server tools, rejoin, reset                            ║
-║     • Misc page     — Utilities and info                                     ║
-║     • Settings      — Built into the API (theme, sounds, particles)          ║
-║     • Auto-reload   — Persists across teleports/rejoin/server hop            ║
-║                                                                              ║
-║   Just add your own pages using the examples below!                          ║
-║                                                                              ║
-║   CONTROLS:                                                                  ║
-║     PC:     LEFT ALT = open/close, Arrow keys = navigate                     ║
-║             F/Enter = select, X = back, V = mouse mode                       ║
-║     Mobile: Skull button = open, swipe = navigate, tap = select              ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
---]]
-
-
 --══════════════════════════════════════════════════════════════
---  AUTO-RELOAD ON TELEPORT (like Infinite Yield)
+--  AUTO-RELOAD ON TELEPORT
 --══════════════════════════════════════════════════════════════
---  Set this to YOUR hub's raw URL so it auto-loads on
---  rejoin, server hop, and teleport within the same game.
---  Leave as "" to disable auto-reload.
 
-local HUB_URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Hitbox%20Expander%20%2B%20Triggerbot"  -- ← paste your hub's raw GitHub URL here
+local HUB_URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Hitbox%20Expander%20%2B%20Triggerbot"
 
 if HUB_URL ~= "" then
     local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
@@ -48,32 +19,21 @@ end
 
 
 --══════════════════════════════════════════════════════════════
---  STEP 1: LOAD THE LIBRARY
+--  LOAD LIBRARY
 --══════════════════════════════════════════════════════════════
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
 
 
 --══════════════════════════════════════════════════════════════
---  STEP 2: CREATE THE WINDOW
+--  CREATE WINDOW
 --══════════════════════════════════════════════════════════════
 
-local Window = Library:CreateWindow("MY HUB", "V1.0")  -- ← change title and version
-
---  Window methods:
---    Window:CreatePage(name)    → Page object
---    Window:Toggle/Show/Hide()  → menu visibility
---    Window:Notify(msg)         → toast notification
---    Window:Destroy()           → destroy GUI
---    Window:SaveConfig(name)    → save settings to file
---    Window:LoadConfig(name)    → load settings from file
---    Window:GetProfiles()       → list saved profiles
---    Window:ExportConfig(name)  → copy config to clipboard
---    Window:DeleteConfig(name)  → delete a profile
+local Window = Library:CreateWindow("MY HUB", "V1.0")
 
 
 --══════════════════════════════════════════════════════════════
---  STEP 3: SERVICES
+--  SERVICES
 --══════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
@@ -100,7 +60,6 @@ local function sendNotification(title, text)
     end
 end
 
--- Functional toggles: reset to safe defaults on config load
 local functionalToggles = {}
 
 local function registerFunctionalToggle(toggle, defaultState)
@@ -114,107 +73,9 @@ local function resetFunctionalToggles()
 end
 
 
---[[
-══════════════════════════════════════════════════════════════════
-   ELEMENT REFERENCE
-══════════════════════════════════════════════════════════════════
-
-   Section:CreateToggle(label, {Toggled=false}, function(v) end)     → {Set, Get}
-   Section:CreateSlider(label, {Min,Max,DefaultValue,Step}, fn(v))   → {Set, Get}
-   Section:CreateButton(label, function() end)
-   Section:CreateTextbox(label, placeholder, function(text) end)     → {Set, Get}
-   Section:CreateDropdown(label, {List,Default}, function(v) end)    → {Set,Get,Clear,Add,Refresh}
-   Section:CreateKeybind(label, {Default=nil}, function(key) end)    → {Set, Get}
-   Section:CreateLabel(text)
-   Section:CreateDivider()
-
-   CONFIG: Saves toggles, sliders, dropdowns, textboxes, keybinds + UI settings.
-   Toggle:Set() fires the callback, so config load activates features properly.
-
-══════════════════════════════════════════════════════════════════
---]]
-
-
 --══════════════════════════════════════════════════════════════
---  YOUR PAGES GO HERE  ↓↓↓
+--  SHARED HELPERS
 --══════════════════════════════════════════════════════════════
---  Pages appear in the order you create them.
---  Settings page is added automatically by the API.
---
---    local MyPage = Window:CreatePage("My Page")
---    local MySection = MyPage:CreateSection("Section Name")
---    MySection:CreateToggle("My Toggle", { Toggled = false }, function(v) ... end)
-
--- ┌────────────────────────────────────────────────────────────┐
--- │  ADD YOUR PAGES BELOW THIS LINE                            │
--- └────────────────────────────────────────────────────────────┘
-
-
-
-
--- ┌────────────────────────────────────────────────────────────┐
--- │  ADD YOUR PAGES ABOVE THIS LINE                            │
--- └────────────────────────────────────────────────────────────┘
-
-
---╔══════════════════════════════════════════════════════════════════════════╗
---║    ⚠️  EXAMPLES PAGE — DELETE THIS ENTIRE SECTION WHEN YOU'RE DONE  ⚠️   ║
---║    This is just a reference showing every element type.                 ║
---║    It's safe to delete everything between the ════ lines below.        ║
---╚══════════════════════════════════════════════════════════════════════════╝
--- ═══════════════ START DELETE ═══════════════
-
-local ExamplePage = Window:CreatePage("Examples")
-
-local ToggleSection = ExamplePage:CreateSection("Toggles")
-ToggleSection:CreateLabel("Toggles are on/off switches")
-ToggleSection:CreateDivider()
-local myToggle = ToggleSection:CreateToggle("Example Toggle", { Toggled = false }, function(value)
-    Window:Notify("Toggle: " .. tostring(value))
-end)
-
-local SliderSection = ExamplePage:CreateSection("Sliders")
-SliderSection:CreateLabel("Sliders pick a number in a range")
-SliderSection:CreateDivider()
-local mySlider = SliderSection:CreateSlider("Speed Value", {
-    Min = 0, Max = 100, DefaultValue = 50, Step = 5,
-}, function(value)
-    Window:Notify("Speed: " .. value)
-end)
-
-local ButtonSection = ExamplePage:CreateSection("Buttons")
-ButtonSection:CreateButton("Click Me", function() Window:Notify("Clicked!") end)
-
-local DropdownSection = ExamplePage:CreateSection("Dropdowns")
-local myDropdown = DropdownSection:CreateDropdown("Pick a Fruit", {
-    List = { "Apple", "Banana", "Cherry", "Grape" }, Default = "Apple",
-}, function(value)
-    Window:Notify("Picked: " .. value)
-end)
-
-local TextboxSection = ExamplePage:CreateSection("Textboxes")
-local myTextbox = TextboxSection:CreateTextbox("Username", "Enter name...", function(text)
-    Window:Notify("Typed: " .. text)
-end)
-
-local KeybindSection = ExamplePage:CreateSection("Keybinds")
-KeybindSection:CreateLabel("Fires when menu is CLOSED")
-local myKeybind = KeybindSection:CreateKeybind("Action Key", { Default = nil }, function(key)
-    print("Keybind pressed:", key.Name)
-end)
-
--- ═══════════════ END DELETE ═══════════════
-
-
---╔══════════════════════════════════════════════════════════════════════════╗
---║                                                                        ║
---║            HITBOX EXPANDER + TRIGGERBOT (integrated)                    ║
---║                                                                        ║
---╚══════════════════════════════════════════════════════════════════════════╝
-
---================================--
---       SHARED HELPERS           --
---================================--
 
 local function isAlive(character)
     if not character or not character.Parent then return false end
@@ -277,9 +138,9 @@ local function isTeammatePlayer(plr)
 end
 
 
---================================--
---   HITBOX EXPANDER VARIABLES    --
---================================--
+--══════════════════════════════════════════════════════════════
+--  HITBOX EXPANDER VARIABLES
+--══════════════════════════════════════════════════════════════
 
 local HitboxSettings = {
     Enabled = false,
@@ -301,9 +162,10 @@ local HitboxSettings = {
 local editedCharacters = {}
 local originalHitboxData = {}
 
---================================--
---   HITBOX EXPANDER LOGIC        --
---================================--
+
+--══════════════════════════════════════════════════════════════
+--  HITBOX EXPANDER LOGIC
+--══════════════════════════════════════════════════════════════
 
 local overlapParams = OverlapParams.new()
 overlapParams.FilterType = Enum.RaycastFilterType.Blacklist
@@ -322,12 +184,10 @@ local function isValidTarget(character)
     return false
 end
 
--- Safe property setter: pcall prevents errors on incompatible BasePart types
 local function safeSet(obj, prop, val)
     pcall(function() obj[prop] = val end)
 end
 
--- Save all original properties before modifying (reads safely)
 local function saveOriginal(hitbox)
     if originalHitboxData[hitbox] then return end
     local data = {}
@@ -342,7 +202,6 @@ local function saveOriginal(hitbox)
     originalHitboxData[hitbox] = data
 end
 
--- Restore all original properties
 local function restoreOriginal(hitbox)
     local data = originalHitboxData[hitbox]
     if not data then return end
@@ -363,17 +222,14 @@ local function applyHitbox(character)
     saveOriginal(hitbox)
     editedCharacters[character] = true
 
-    -- Remove decals/textures/surface appearances that cover the visual
     for _, child in ipairs(hitbox:GetChildren()) do
         if child:IsA("Decal") or child:IsA("Texture") or child:IsA("SurfaceAppearance") then
             pcall(function() child:Destroy() end)
         end
     end
 
-    -- Size (always applied — the whole point of hitbox expander)
     safeSet(hitbox, "Size", Vector3.new(HitboxSettings.HitboxSize, HitboxSettings.HitboxSize, HitboxSettings.HitboxSize))
 
-    -- Optional properties
     if HitboxSettings.ApplyTransparency then
         safeSet(hitbox, "Transparency", HitboxSettings.Transparency)
     end
@@ -382,7 +238,7 @@ local function applyHitbox(character)
     end
     if HitboxSettings.ApplyColor then
         safeSet(hitbox, "BrickColor", HitboxSettings.Color)
-        safeSet(hitbox, "Color", HitboxSettings.Color.Color) -- Color3 for MeshParts
+        safeSet(hitbox, "Color", HitboxSettings.Color.Color)
     end
     if HitboxSettings.ApplyCanCollide then
         safeSet(hitbox, "CanCollide", false)
@@ -390,7 +246,6 @@ local function applyHitbox(character)
     if HitboxSettings.ApplyMassless then
         safeSet(hitbox, "Massless", true)
     end
-    -- Keep queryable so raycasts/mouse still register hits
     safeSet(hitbox, "CanQuery", true)
 end
 
@@ -405,12 +260,10 @@ local function restoreAllHitboxes()
     end
 end
 
--- Main hitbox loop
 task.spawn(function()
     while task.wait(0.1) do
         if not HitboxSettings.Enabled then continue end
 
-        -- Cleanup dead/removed
         for character, _ in pairs(editedCharacters) do
             if not character or not character.Parent or not isAlive(character) then
                 local hitbox = character and character:FindFirstChild(HitboxSettings.HitboxPartName)
@@ -419,7 +272,6 @@ task.spawn(function()
             end
         end
 
-        -- Find new targets
         local char = player.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if hrp then
@@ -439,9 +291,9 @@ task.spawn(function()
 end)
 
 
---================================--
---      TRIGGERBOT VARIABLES      --
---================================--
+--══════════════════════════════════════════════════════════════
+--  TRIGGERBOT VARIABLES
+--══════════════════════════════════════════════════════════════
 
 local triggerBotEnabled = false
 local triggerConfig = {
@@ -525,9 +377,10 @@ local function getCharacterModel(part)
     end
 end
 
---================================--
---   PLAYER MODEL RESOLVER        --
---================================--
+
+--══════════════════════════════════════════════════════════════
+--  PLAYER MODEL RESOLVER
+--══════════════════════════════════════════════════════════════
 
 local modelToPlayer = setmetatable({}, { __mode = "k" })
 local playerNameSet = {}
@@ -598,9 +451,10 @@ local function getOwningPlayerModel(part)
     return nil, nil
 end
 
---================================--
---   TRIGGERBOT TARGET VALIDATION  --
---================================--
+
+--══════════════════════════════════════════════════════════════
+--  TRIGGERBOT TARGET VALIDATION
+--══════════════════════════════════════════════════════════════
 
 local function getValidTarget(part)
     if not part then return false end
@@ -635,7 +489,6 @@ local function getValidTarget(part)
     return false
 end
 
--- Main TriggerBot loop
 RunService.RenderStepped:Connect(function()
     if not triggerBotEnabled then
         if tbClicking then setClick(false) end
@@ -653,9 +506,9 @@ RunService.RenderStepped:Connect(function()
 end)
 
 
---╔══════════════════════════════════════════════════════════════════════════╗
---║                     HITBOX EXPANDER PAGE                               ║
---╚══════════════════════════════════════════════════════════════════════════╝
+--══════════════════════════════════════════════════════════════
+--  HITBOX EXPANDER PAGE
+--══════════════════════════════════════════════════════════════
 
 local HitboxPage = Window:CreatePage("Hitbox Expander")
 
@@ -737,9 +590,9 @@ HBAdvSection:CreateButton("Reset All Hitboxes", function()
 end)
 
 
---╔══════════════════════════════════════════════════════════════════════════╗
---║                        TRIGGERBOT PAGE                                 ║
---╚══════════════════════════════════════════════════════════════════════════╝
+--══════════════════════════════════════════════════════════════
+--  TRIGGERBOT PAGE
+--══════════════════════════════════════════════════════════════
 
 local TriggerPage = Window:CreatePage("TriggerBot")
 
@@ -783,9 +636,9 @@ TBTeamSection:CreateDropdown("Exclusion Mode", {
 end)
 
 
---╔══════════════════════════════════════════════════════════════════════════╗
---║                   SERVER PAGE (do not modify)                          ║
---╚══════════════════════════════════════════════════════════════════════════╝
+--══════════════════════════════════════════════════════════════
+--  SERVER PAGE
+--══════════════════════════════════════════════════════════════
 
 local ServerPage = Window:CreatePage("Server")
 local ServerSection = ServerPage:CreateSection("Server Tools")
@@ -825,9 +678,9 @@ ServerSection:CreateButton("Reset Character", function()
 end)
 
 
---╔══════════════════════════════════════════════════════════════════════════╗
---║                   MISC PAGE (do not modify)                            ║
---╚══════════════════════════════════════════════════════════════════════════╝
+--══════════════════════════════════════════════════════════════
+--  MISC PAGE
+--══════════════════════════════════════════════════════════════
 
 local MiscPage = Window:CreatePage("Misc")
 
@@ -860,7 +713,7 @@ UtilSection:CreateDivider()
 
 local InfoSection = MiscPage:CreateSection("Information")
 
-InfoSection:CreateLabel("Script: MY HUB V1.0")              -- ← change script name only
+InfoSection:CreateLabel("Script: MY HUB V1.0")
 InfoSection:CreateLabel("Discord: spookyie")
 InfoSection:CreateDivider()
 
@@ -876,9 +729,9 @@ InfoSection:CreateButton("Destroy GUI", function()
 end)
 
 
---╔══════════════════════════════════════════════════════════════════════════╗
---║                  CONFIG PAGE (do not modify)                           ║
---╚══════════════════════════════════════════════════════════════════════════╝
+--══════════════════════════════════════════════════════════════
+--  CONFIG PAGE
+--══════════════════════════════════════════════════════════════
 
 local ConfigPage = Window:CreatePage("Config")
 local ConfigSection = ConfigPage:CreateSection("Save & Load")
@@ -952,37 +805,3 @@ game:BindToClose(function()
 end)
 
 print("[HUB] Ready!")
-
-
---[[
-══════════════════════════════════════════════════════════════════
-   QUICK-START CHEATSHEET
-══════════════════════════════════════════════════════════════════
-
-   ADD A NEW PAGE:
-   ────────────────
-   local MyPage = Window:CreatePage("Page Name")
-   local MySection = MyPage:CreateSection("Section Name")
-
-   ADD ELEMENTS:
-   ─────────────
-   MySection:CreateToggle("Name", { Toggled = false }, function(v) end)
-   MySection:CreateSlider("Name", { Min=0, Max=100, DefaultValue=50, Step=1 }, function(v) end)
-   MySection:CreateButton("Name", function() end)
-   MySection:CreateTextbox("Name", "placeholder...", function(text) end)
-   MySection:CreateDropdown("Name", { List={"A","B"}, Default="A" }, function(v) end)
-   MySection:CreateKeybind("Name", { Default=nil }, function(key) end)
-   MySection:CreateLabel("text")
-   MySection:CreateDivider()
-
-   FUNCTIONAL TOGGLE (resets on config load):
-   ──────────────────────────────────────────
-   local toggle = MySection:CreateToggle(...)
-   registerFunctionalToggle(toggle, false)
-
-   AUTO-RELOAD:
-   ────────────
-   Set HUB_URL at line 36 to your hub's raw GitHub URL.
-
-══════════════════════════════════════════════════════════════════
---]]
