@@ -1,25 +1,34 @@
 --══════════════════════════════════════════════════════════════
---  AUTO-RELOAD ON TELEPORT
+--  AUTO-RELOAD ON TELEPORT (Enhanced for Solara)
 --══════════════════════════════════════════════════════════════
 
 local HUB_URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Hitbox%20Expander%20%2B%20Triggerbot"
 
 if HUB_URL ~= "" then
     local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
-    local success = pcall(function()
-        if syn and syn.queue_on_teleport then
-            syn.queue_on_teleport(queueCode)
-        elseif queue_on_teleport then
-            queue_on_teleport(queueCode)
-        elseif fluxus and fluxus.queue_on_teleport then
-            fluxus.queue_on_teleport(queueCode)
-        end
-    end)
-    if success then
-        print("[AUTO-RELOAD] Enabled for Solara")
-    else
-        print("[AUTO-RELOAD] Failed - executor may not support queue_on_teleport")
+    
+    -- Queue immediately
+    local function setupAutoReload()
+        local success = pcall(function()
+            if syn and syn.queue_on_teleport then
+                syn.queue_on_teleport(queueCode)
+            elseif queue_on_teleport then
+                queue_on_teleport(queueCode)
+            elseif fluxus and fluxus.queue_on_teleport then
+                fluxus.queue_on_teleport(queueCode)
+            end
+        end)
+        return success
     end
+    
+    -- Try multiple times with delays (Solara can be finicky)
+    setupAutoReload()
+    task.wait(0.5)
+    setupAutoReload()
+    task.wait(1)
+    setupAutoReload()
+    
+    print("[AUTO-RELOAD] Queued 3x for reliability")
 end
 
 
@@ -34,7 +43,7 @@ local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Seany
 --  CREATE WINDOW
 --══════════════════════════════════════════════════════════════
 
-local Window = Library:CreateWindow("MY HUB", "V1.0")
+local Window = Library:CreateWindow("Hitbox & TriggerBot", "V1.0")
 
 
 --══════════════════════════════════════════════════════════════
@@ -665,15 +674,19 @@ ServerSection:CreateButton("Rejoin Server", function()
     Window:Notify("Rejoining...")
     if HUB_URL ~= "" then
         local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
-        pcall(function()
-            if syn and syn.queue_on_teleport then
-                syn.queue_on_teleport(queueCode)
-            elseif queue_on_teleport then
-                queue_on_teleport(queueCode)
-            elseif fluxus and fluxus.queue_on_teleport then
-                fluxus.queue_on_teleport(queueCode)
-            end
-        end)
+        -- Queue multiple times for reliability
+        for i = 1, 3 do
+            pcall(function()
+                if syn and syn.queue_on_teleport then
+                    syn.queue_on_teleport(queueCode)
+                elseif queue_on_teleport then
+                    queue_on_teleport(queueCode)
+                elseif fluxus and fluxus.queue_on_teleport then
+                    fluxus.queue_on_teleport(queueCode)
+                end
+            end)
+            task.wait(0.2)
+        end
     end
     task.wait(0.5)
     pcall(function()
@@ -724,7 +737,7 @@ UtilSection:CreateDivider()
 
 local InfoSection = MiscPage:CreateSection("Information")
 
-InfoSection:CreateLabel("Script: MY HUB V1.0")
+InfoSection:CreateLabel("Script: Hitbox & TriggerBot V1.0")
 InfoSection:CreateLabel("Discord: spookyie")
 InfoSection:CreateDivider()
 
@@ -814,5 +827,19 @@ resetFunctionalToggles()
 game:BindToClose(function()
     pcall(function() Window:SaveConfig("Default") end)
 end)
+
+-- Re-queue auto-reload one more time after everything is initialized
+if HUB_URL ~= "" then
+    local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
+    pcall(function()
+        if syn and syn.queue_on_teleport then
+            syn.queue_on_teleport(queueCode)
+        elseif queue_on_teleport then
+            queue_on_teleport(queueCode)
+        elseif fluxus and fluxus.queue_on_teleport then
+            fluxus.queue_on_teleport(queueCode)
+        end
+    end)
+end
 
 print("[HUB] Ready!")
