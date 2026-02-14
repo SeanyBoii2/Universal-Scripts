@@ -6,7 +6,7 @@ local HUB_URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/
 
 if HUB_URL ~= "" then
     local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
-    pcall(function()
+    local success = pcall(function()
         if syn and syn.queue_on_teleport then
             syn.queue_on_teleport(queueCode)
         elseif queue_on_teleport then
@@ -15,6 +15,11 @@ if HUB_URL ~= "" then
             fluxus.queue_on_teleport(queueCode)
         end
     end)
+    if success then
+        print("[AUTO-RELOAD] Enabled for Solara")
+    else
+        print("[AUTO-RELOAD] Failed - executor may not support queue_on_teleport")
+    end
 end
 
 
@@ -658,11 +663,17 @@ end)
 
 ServerSection:CreateButton("Rejoin Server", function()
     Window:Notify("Rejoining...")
-    local scriptUrl = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/WHITELIST%20TRICKS"
-    if syn and syn.queue_on_teleport then
-        syn.queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
-    elseif queue_on_teleport then
-        queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    if HUB_URL ~= "" then
+        local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
+        pcall(function()
+            if syn and syn.queue_on_teleport then
+                syn.queue_on_teleport(queueCode)
+            elseif queue_on_teleport then
+                queue_on_teleport(queueCode)
+            elseif fluxus and fluxus.queue_on_teleport then
+                fluxus.queue_on_teleport(queueCode)
+            end
+        end)
     end
     task.wait(0.5)
     pcall(function()
