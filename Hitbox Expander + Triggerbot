@@ -7,25 +7,33 @@ local HUB_URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/
 -- Define queueteleport function (like IY does)
 local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
 
-if queueteleport then
-    print("[AUTO-RELOAD] Queue function found and ready")
-else
-    warn("[AUTO-RELOAD] No queue function available")
-end
-
 
 --══════════════════════════════════════════════════════════════
 --  LOAD LIBRARY
 --══════════════════════════════════════════════════════════════
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+local Library
+local libraryLoadSuccess, libraryLoadError = pcall(function()
+    Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+end)
+
+if not libraryLoadSuccess then
+    -- Silently retry once
+    task.wait(0.5)
+    pcall(function()
+        Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+    end)
+end
 
 
 --══════════════════════════════════════════════════════════════
 --  CREATE WINDOW
 --══════════════════════════════════════════════════════════════
 
-local Window = Library:CreateWindow("Hitbox & TriggerBot", "V1.0")
+local Window
+pcall(function()
+    Window = Library:CreateWindow("Hitbox & TriggerBot", "V1.0")
+end)
 
 
 --══════════════════════════════════════════════════════════════
@@ -656,27 +664,17 @@ ServerSection:CreateButton("Rejoin Server", function()
     if queueteleport and HUB_URL ~= "" then
         -- Queue the script RIGHT before teleporting (like IY does)
         local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
-        local success = pcall(function()
+        pcall(function()
             queueteleport(queueCode)
         end)
-        
-        if success then
-            print("[REJOIN] Script queued successfully")
-        else
-            warn("[REJOIN] Failed to queue script")
-        end
     end
     
     -- Small delay then teleport
     task.wait(0.3)
     
-    local success, err = pcall(function()
+    pcall(function()
         TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
     end)
-    
-    if not success then
-        warn("[REJOIN] Teleport failed:", err)
-    end
 end)
 
 ServerSection:CreateButton("Server Hop", function()
@@ -688,7 +686,6 @@ ServerSection:CreateButton("Server Hop", function()
         pcall(function()
             queueteleport(queueCode)
         end)
-        print("[SERVER HOP] Script queued")
     end
     
     -- Get list of servers
@@ -715,7 +712,6 @@ ServerSection:CreateButton("Server Hop", function()
     end)
     
     if not success then
-        warn("[SERVER HOP] Error:", result)
         Window:Notify("Server hop failed!")
     end
 end)
