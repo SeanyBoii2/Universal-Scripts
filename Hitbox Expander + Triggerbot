@@ -7,9 +7,8 @@ local HUB_URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/
 if HUB_URL ~= "" then
     local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
     
-    -- Queue immediately
-    local function setupAutoReload()
-        local success = pcall(function()
+    local function queueScript()
+        pcall(function()
             if syn and syn.queue_on_teleport then
                 syn.queue_on_teleport(queueCode)
             elseif queue_on_teleport then
@@ -18,17 +17,26 @@ if HUB_URL ~= "" then
                 fluxus.queue_on_teleport(queueCode)
             end
         end)
-        return success
     end
     
-    -- Try multiple times with delays (Solara can be finicky)
-    setupAutoReload()
-    task.wait(0.5)
-    setupAutoReload()
-    task.wait(1)
-    setupAutoReload()
+    -- Queue immediately
+    queueScript()
     
-    print("[AUTO-RELOAD] Queued 3x for reliability")
+    -- Continuously re-queue every 5 seconds (Solara loses the queue)
+    task.spawn(function()
+        while true do
+            task.wait(5)
+            queueScript()
+        end
+    end)
+    
+    -- Also re-queue when character is added
+    player.CharacterAdded:Connect(function()
+        task.wait(1)
+        queueScript()
+    end)
+    
+    print("[AUTO-RELOAD] Continuous queuing enabled")
 end
 
 
@@ -827,19 +835,5 @@ resetFunctionalToggles()
 game:BindToClose(function()
     pcall(function() Window:SaveConfig("Default") end)
 end)
-
--- Re-queue auto-reload one more time after everything is initialized
-if HUB_URL ~= "" then
-    local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
-    pcall(function()
-        if syn and syn.queue_on_teleport then
-            syn.queue_on_teleport(queueCode)
-        elseif queue_on_teleport then
-            queue_on_teleport(queueCode)
-        elseif fluxus and fluxus.queue_on_teleport then
-            fluxus.queue_on_teleport(queueCode)
-        end
-    end)
-end
 
 print("[HUB] Ready!")
