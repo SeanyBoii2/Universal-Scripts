@@ -13,12 +13,11 @@ local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (f
 --══════════════════════════════════════════════════════════════
 
 local Library
-local libraryLoadSuccess, libraryLoadError = pcall(function()
+pcall(function()
     Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
 end)
 
-if not libraryLoadSuccess then
-    -- Silently retry once
+if not Library then
     task.wait(0.5)
     pcall(function()
         Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
@@ -662,14 +661,12 @@ end)
 
 ServerSection:CreateButton("Rejoin Server", function()
     if queueteleport and HUB_URL ~= "" then
-        -- Queue the script RIGHT before teleporting (like IY does)
         local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
         pcall(function()
             queueteleport(queueCode)
         end)
     end
     
-    -- Small delay then teleport
     task.wait(0.3)
     
     pcall(function()
@@ -681,24 +678,20 @@ ServerSection:CreateButton("Server Hop", function()
     Window:Notify("Finding new server...")
     
     if queueteleport and HUB_URL ~= "" then
-        -- Queue the script before hopping
         local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
         pcall(function()
             queueteleport(queueCode)
         end)
     end
     
-    -- Get list of servers
     local success, result = pcall(function()
         local servers = game:GetService("HttpService"):JSONDecode(
             game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
         )
         
         if servers and servers.data then
-            -- Find a different server
             for _, server in pairs(servers.data) do
                 if server.id ~= game.JobId and server.playing < server.maxPlayers then
-                    -- Found a different server, teleport to it
                     Window:Notify("Joining new server...")
                     task.wait(0.5)
                     TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id)
@@ -722,9 +715,8 @@ ServerSection:CreateDivider()
 --  SERVER SAVER SYSTEM
 -- ═══════════════════════════════════════════════════════════
 local HttpService = game:GetService("HttpService")
-local FILE_NAME = "SavedServers_HitboxHub.json"
+local FILE_NAME = "SavedServers_SpookaliciousHub.json"
 
--- Save/Load System
 local function saveServerData(data)
     if writefile then
         writefile(FILE_NAME, HttpService:JSONEncode(data))
@@ -741,7 +733,6 @@ local function loadServerData()
     return {}
 end
 
--- Server Map (maps display name to index)
 local serverMap = {}
 local selectedServer = nil
 
@@ -759,10 +750,8 @@ local function buildServerList()
     return data, names
 end
 
--- Build initial list
 local serverData, initialServerNames = buildServerList()
 
--- Create Dropdown FIRST (so buttons can reference it)
 local savedServerDropdown = ServerSection:CreateDropdown("Saved Servers", {
     List = initialServerNames,
     Default = initialServerNames[1] or "None"
@@ -772,7 +761,6 @@ end)
 
 selectedServer = initialServerNames[1]
 
--- Save Current Server Button
 ServerSection:CreateButton("Save Current Server", function()
     local data = loadServerData()
     local entry = {
@@ -781,7 +769,7 @@ ServerSection:CreateButton("Save Current Server", function()
         Time = os.date("%H:%M | %d %b")
     }
     table.insert(data, 1, entry)
-    if #data > 20 then table.remove(data, 21) end  -- Keep max 20
+    if #data > 20 then table.remove(data, 21) end
     saveServerData(data)
 
     local _, names = buildServerList()
@@ -791,7 +779,6 @@ ServerSection:CreateButton("Save Current Server", function()
     Window:Notify("Server Saved!")
 end)
 
--- Join Saved Server Button
 ServerSection:CreateButton("Join Saved Server", function()
     if not selectedServer or selectedServer == "None" then
         Window:Notify("No server selected!")
@@ -812,7 +799,6 @@ ServerSection:CreateButton("Join Saved Server", function()
         return
     end
 
-    -- Queue script before teleporting
     if queueteleport and HUB_URL ~= "" then
         local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
         pcall(function()
@@ -825,7 +811,6 @@ ServerSection:CreateButton("Join Saved Server", function()
     TeleportService:TeleportToPlaceInstance(server.PlaceId, server.JobId, player)
 end)
 
--- Refresh Server List Button
 ServerSection:CreateButton("Refresh Server List", function()
     local data, names = buildServerList()
     savedServerDropdown:Refresh(names)
@@ -835,7 +820,6 @@ ServerSection:CreateButton("Refresh Server List", function()
     Window:Notify("Found " .. #data .. " saved servers")
 end)
 
--- Clear Server History Button
 ServerSection:CreateButton("Clear Server History", function()
     saveServerData({})
     serverMap = {}
@@ -879,6 +863,13 @@ UtilSection:CreateButton("Copy Discord", function()
     else
         Window:Notify("Discord: spookyie")
     end
+end)
+
+UtilSection:CreateButton("Load Spookalicious Hub", function()
+    Window:Notify("Loading Spookalicious Hub...")
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/Spooky%20Hub%20Official"))()
+    end)
 end)
 
 UtilSection:CreateTextbox("Webhook URL", "Paste webhook...", function(url)
