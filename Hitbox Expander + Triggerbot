@@ -31,7 +31,7 @@
 --  rejoin, server hop, and teleport within the same game.
 --  Leave as "" to disable auto-reload.
 
-local HUB_URL = ""  -- ← paste your hub's raw GitHub URL here
+local HUB_URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Hitbox%20Expander%20%2B%20Triggerbot"  -- ← paste your hub's raw GitHub URL here
 
 if HUB_URL ~= "" then
     local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
