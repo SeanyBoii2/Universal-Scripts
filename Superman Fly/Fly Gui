@@ -1,912 +1,1051 @@
---== CONFIG / STATE ==--
-local savedSpeed = 60
-local boostEnabled = false
-local flying = false
-local baseSpeed = savedSpeed
-local flySpeed = baseSpeed
-local forwardHold = 0
-local inputFlags = { forward = false, back = false, left = false, right = false, up = false, down = false }
+--[[
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                         SUPERMAN FLY — SPOOKALICIOUS V4                      ║
+║                    (ADVANCED ANTI-INTERRUPT FLY SYSTEM)                      ║
+║                                                                              ║
+║   This hub features the most advanced Superman Fly system built              ║
+║   on the Spookalicious V4 API. Features include:                             ║
+║                                                                              ║
+║     • Superman Fly  — Unstoppable anti-interrupt fly system                  ║
+║     • Config page   — Save/load settings across sessions                     ║
+║     • Server page   — Server tools, rejoin, server hop, reset                ║
+║     • Misc page     — Utilities and info                                     ║
+║     • Settings      — Built into the API (theme, sounds, particles)          ║
+║                                                                              ║
+║   FLY CONTROLS:                                                              ║
+║     T          = Toggle fly on/off                                           ║
+║     WASD       = Move forward/back/left/right                                ║
+║     E / Q      = Move up / down                                              ║
+║     Left Ctrl  = Speed boost                                                 ║
+║                                                                              ║
+║   GUI CONTROLS:                                                              ║
+║     PC:     LEFT ALT = open/close, Arrow keys = navigate                     ║
+║             F/Enter = select, X = back, V = mouse mode                       ║
+║     Mobile: Skull button = open, swipe = navigate, tap = select              ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+--]]
+
+
+--══════════════════════════════════════════════════════════════
+--  STEP 1: AUTO-RELOAD SETUP
+--══════════════════════════════════════════════════════════════
+--  This enables auto-reload when rejoining or server hopping
+
+local SCRIPT_URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Superman%20Fly/Fly%20Gui"
+
+-- Setup queue function (works with Solara and other executors)
+local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+
+
+--══════════════════════════════════════════════════════════════
+--  STEP 2: LOAD THE LIBRARY
+--══════════════════════════════════════════════════════════════
+
+local Library
+pcall(function()
+    Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+end)
+
+if not Library then
+    task.wait(0.5)
+    pcall(function()
+        Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
+    end)
+end
+
+
+--══════════════════════════════════════════════════════════════
+--  STEP 3: CREATE THE WINDOW
+--══════════════════════════════════════════════════════════════
+
+local Window
+pcall(function()
+    Window = Library:CreateWindow("SUPERMAN FLY", "V1.0")
+end)
+
+
+--══════════════════════════════════════════════════════════════
+--  STEP 4: SERVICES
+--══════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local TeleportService = game:GetService("TeleportService")
+local VirtualUser = game:GetService("VirtualUser")
+local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
+local _hasFS = (typeof(writefile) == "function" and typeof(readfile) == "function")
+
+local function sendNotification(title, text)
+    for i = 1, 10 do
+        local success = pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = title,
+                Text = text,
+                Duration = 5,
+            })
+        end)
+        if success then break end
+        task.wait(0.5)
+    end
+end
+
+-- Track toggles that should reset to OFF/default when config loads
+local functionalToggles = {}
+
+local function registerFunctionalToggle(toggle, defaultState)
+    table.insert(functionalToggles, { ref = toggle, default = defaultState or false })
+end
+
+local function resetFunctionalToggles()
+    for _, item in ipairs(functionalToggles) do
+        item.ref:Set(item.default)
+    end
+end
+
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │  SUPERMAN FLY INTEGRATION                                  │
+-- └────────────────────────────────────────────────────────────┘
+
+--══════════════════════════════════════════════════════════════
+--  SUPERMAN FLY - STATE VARIABLES
+--══════════════════════════════════════════════════════════════
+
+local flying = false
+local boostEnabled = false
+local flySpeed = 60
+local baseSpeed = 60
+local forwardHold = 0
+local inputFlags = { forward = false, back = false, left = false, right = false, up = false, down = false }
+
 local Camera = workspace.CurrentCamera
 local character, humanoid, HRP
-
 local bodyVelocity, bodyGyro
-local screenGui, toggleButton, speedBox
 local animations, tracks = {}, {}
-
 local gyroSmoothness = 10
 
 -- Anti-interrupt state
 local protectionLoop = nil
-local savedProperties = {} -- stores original character state for clean restore
+local savedProperties = {}
+local animateScript
+local stateChangedConn
+local ancestryConnections = {}
 
---== CAMERA FOV HANDLING ==--
+-- Camera FOV
 local defaultFOV = Camera.FieldOfView
 local targetFOV = defaultFOV
 local tweenFOV
 
 local function setFOV(newFOV)
-	if tweenFOV then tweenFOV:Cancel() end
-	targetFOV = newFOV
-	tweenFOV = TweenService:Create(Camera, TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {FieldOfView = targetFOV})
-	tweenFOV:Play()
+    if tweenFOV then tweenFOV:Cancel() end
+    targetFOV = newFOV
+    tweenFOV = TweenService:Create(Camera, TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {FieldOfView = targetFOV})
+    tweenFOV:Play()
 end
 
 local function updateFOV()
-	local fov = defaultFOV
-	if flying then fov = fov + 10 end
-	if boostEnabled then fov = fov + 20 end
-	setFOV(fov)
+    local fov = defaultFOV
+    if flying then fov = fov + 10 end
+    if boostEnabled then fov = fov + 20 end
+    setFOV(fov)
 end
 
---== ANIMS ==--
+--══════════════════════════════════════════════════════════════
+--  SUPERMAN FLY - ANIMATIONS
+--══════════════════════════════════════════════════════════════
+
 local function newAnim(id)
-	local anim = Instance.new("Animation")
-	anim.AnimationId = "rbxassetid://" .. id
-	return anim
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://" .. id
+    return anim
 end
 
 local function setupAnimations()
-	animations = {
-		forward = newAnim(90872539),
-		up = newAnim(90872539),
-		right1 = newAnim(136801964),
-		right2 = newAnim(142495255),
-		left1 = newAnim(136801964),
-		left2 = newAnim(142495255),
-		flyLow1 = newAnim(97169019),
-		flyLow2 = newAnim(282574440),
-		flyFast = newAnim(282574440),
-		back1 = newAnim(214744412),
-		back2 = newAnim(214744412),
-		back3 = newAnim(214744412),
-		back4 = newAnim(214744412),
-		down = newAnim(233322916),
-		idle1 = newAnim(97171309),
-		idleHover = newAnim(313762630)
-	}
-	tracks = {}
-	for name, anim in pairs(animations) do
-		tracks[name] = humanoid:LoadAnimation(anim)
-	end
+    animations = {
+        forward = newAnim(90872539),
+        up = newAnim(90872539),
+        right1 = newAnim(136801964),
+        right2 = newAnim(142495255),
+        left1 = newAnim(136801964),
+        left2 = newAnim(142495255),
+        flyLow1 = newAnim(97169019),
+        flyLow2 = newAnim(282574440),
+        flyFast = newAnim(282574440),
+        back1 = newAnim(214744412),
+        back2 = newAnim(214744412),
+        back3 = newAnim(214744412),
+        back4 = newAnim(214744412),
+        down = newAnim(233322916),
+        idle1 = newAnim(97171309),
+        idleHover = newAnim(313762630)
+    }
+    tracks = {}
+    for name, anim in pairs(animations) do
+        tracks[name] = humanoid:LoadAnimation(anim)
+    end
 end
 
 local function stopAll()
-	for _, track in pairs(tracks) do
-		if track and track.IsPlaying then
-			track:Stop(0.25)
-		end
-	end
+    for _, track in pairs(tracks) do
+        if track and track.IsPlaying then
+            track:Stop(0.25)
+        end
+    end
 end
 
---== ANTI-INTERRUPT: Aggressively maintain physics objects ==--
+--══════════════════════════════════════════════════════════════
+--  SUPERMAN FLY - ANTI-INTERRUPT PROTECTION
+--══════════════════════════════════════════════════════════════
+
 local function nukeExternalForces()
-	if not HRP then return end
-	-- Destroy any BodyMovers that aren't ours
-	for _, obj in ipairs(HRP:GetChildren()) do
-		if (obj:IsA("BodyVelocity") or obj:IsA("BodyForce") or obj:IsA("BodyPosition")
-			or obj:IsA("BodyThrust") or obj:IsA("VectorForce") or obj:IsA("LinearVelocity")
-			or obj:IsA("AlignPosition") or obj:IsA("AlignOrientation")
-			or obj:IsA("BodyAngularVelocity")) then
-			-- Only destroy if it's NOT our fly objects
-			if obj ~= bodyVelocity and obj ~= bodyGyro then
-				obj:Destroy()
-			end
-		end
-	end
+    if not HRP then return end
+    for _, obj in ipairs(HRP:GetChildren()) do
+        if (obj:IsA("BodyVelocity") or obj:IsA("BodyForce") or obj:IsA("BodyPosition")
+            or obj:IsA("BodyThrust") or obj:IsA("VectorForce") or obj:IsA("LinearVelocity")
+            or obj:IsA("AlignPosition") or obj:IsA("AlignOrientation")
+            or obj:IsA("BodyAngularVelocity")) then
+            if obj ~= bodyVelocity and obj ~= bodyGyro then
+                obj:Destroy()
+            end
+        end
+    end
 end
 
 local function ensurePhysics()
-	if not HRP then return end
+    if not HRP then return end
 
-	-- If our BodyVelocity got destroyed or reparented, recreate it
-	if not bodyVelocity or not bodyVelocity.Parent or bodyVelocity.Parent ~= HRP then
-		if bodyVelocity then pcall(function() bodyVelocity:Destroy() end) end
-		bodyVelocity = Instance.new("BodyVelocity")
-		bodyVelocity.Name = "SUPERMAN_VEL"
-		bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-		bodyVelocity.Velocity = Vector3.zero
-		bodyVelocity.P = 10000
-		bodyVelocity.Parent = HRP
-	else
-		-- Force max force every frame in case something changed it
-		bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-	end
+    if not bodyVelocity or not bodyVelocity.Parent or bodyVelocity.Parent ~= HRP then
+        if bodyVelocity then pcall(function() bodyVelocity:Destroy() end) end
+        bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Name = "SUPERMAN_VEL"
+        bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bodyVelocity.Velocity = Vector3.zero
+        bodyVelocity.P = 10000
+        bodyVelocity.Parent = HRP
+    else
+        bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    end
 
-	-- Same for BodyGyro
-	if not bodyGyro or not bodyGyro.Parent or bodyGyro.Parent ~= HRP then
-		if bodyGyro then pcall(function() bodyGyro:Destroy() end) end
-		bodyGyro = Instance.new("BodyGyro")
-		bodyGyro.Name = "SUPERMAN_GYRO"
-		bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-		bodyGyro.CFrame = Camera.CFrame
-		bodyGyro.P = 5000
-		bodyGyro.D = 300
-		bodyGyro.Parent = HRP
-	else
-		bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-	end
+    if not bodyGyro or not bodyGyro.Parent or bodyGyro.Parent ~= HRP then
+        if bodyGyro then pcall(function() bodyGyro:Destroy() end) end
+        bodyGyro = Instance.new("BodyGyro")
+        bodyGyro.Name = "SUPERMAN_GYRO"
+        bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        bodyGyro.CFrame = Camera.CFrame
+        bodyGyro.P = 5000
+        bodyGyro.D = 300
+        bodyGyro.Parent = HRP
+    else
+        bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    end
 end
 
 local function forceHumanoidState()
-	if not humanoid then return end
-	-- Keep PlatformStand true no matter what
-	humanoid.PlatformStand = true
-
-	-- Override any state changes that would ground us
-	pcall(function()
-		if humanoid:GetState() ~= Enum.HumanoidStateType.Physics
-			and humanoid:GetState() ~= Enum.HumanoidStateType.PlatformStanding then
-			humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-		end
-	end)
-
-	-- Prevent ragdoll / fling by zeroing out assembly velocity if we control it
-	-- (we set velocity ourselves each frame so this just prevents external spikes)
+    if not humanoid then return end
+    humanoid.PlatformStand = true
+    pcall(function()
+        if humanoid:GetState() ~= Enum.HumanoidStateType.Physics
+            and humanoid:GetState() ~= Enum.HumanoidStateType.PlatformStanding then
+            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+        end
+    end)
 end
 
 local function disableCharacterCollisions()
-	if not character then return end
-	for _, part in ipairs(character:GetDescendants()) do
-		if part:IsA("BasePart") then
-			-- Save original state
-			if not savedProperties[part] then
-				savedProperties[part] = {
-					CanCollide = part.CanCollide,
-					Massless = part.Massless,
-				}
-			end
-			-- Make massless so external forces have less effect
-			part.Massless = true
-		end
-	end
+    if not character then return end
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if not savedProperties[part] then
+                savedProperties[part] = {
+                    CanCollide = part.CanCollide,
+                    Massless = part.Massless,
+                }
+            end
+            part.Massless = true
+        end
+    end
 end
 
 local function restoreCharacterCollisions()
-	for part, props in pairs(savedProperties) do
-		if part and part.Parent then
-			pcall(function()
-				part.CanCollide = props.CanCollide
-				part.Massless = props.Massless
-			end)
-		end
-	end
-	savedProperties = {}
+    for part, props in pairs(savedProperties) do
+        if part and part.Parent then
+            pcall(function()
+                part.CanCollide = props.CanCollide
+                part.Massless = props.Massless
+            end)
+        end
+    end
+    savedProperties = {}
 end
 
---== START / STOP FLYING ==--
-local animateScript
-local stateChangedConn
-local ancestryConnections = {}
+--══════════════════════════════════════════════════════════════
+--  SUPERMAN FLY - START/STOP FUNCTIONS
+--══════════════════════════════════════════════════════════════
 
 local function startFlying()
-	flying = true
-	forwardHold = 0
-	flySpeed = baseSpeed
+    flying = true
+    forwardHold = 0
+    flySpeed = baseSpeed
 
-	-- Save and disable Animate script
-	if not animateScript and character then
-		animateScript = character:FindFirstChild("Animate")
-	end
-	if animateScript then
-		animateScript.Enabled = false
-	end
+    if not animateScript and character then
+        animateScript = character:FindFirstChild("Animate")
+    end
+    if animateScript then
+        animateScript.Enabled = false
+    end
 
-	-- Disable humanoid states that could interrupt flight
-	pcall(function()
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, false)
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-	end)
+    pcall(function()
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+    end)
 
-	-- Make character parts massless
-	disableCharacterCollisions()
+    disableCharacterCollisions()
+    ensurePhysics()
+    humanoid.PlatformStand = true
+    updateFOV()
 
-	-- Create physics
-	ensurePhysics()
-	humanoid.PlatformStand = true
-	updateFOV()
+    for _, conn in ipairs(ancestryConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    ancestryConnections = {}
 
-	-- Monitor if our physics objects get destroyed (anti-tamper)
-	-- BodyVelocity ancestry watch
-	for _, conn in ipairs(ancestryConnections) do
-		pcall(function() conn:Disconnect() end)
-	end
-	ancestryConnections = {}
+    if bodyVelocity then
+        local conn = bodyVelocity.AncestryChanged:Connect(function(_, newParent)
+            if flying and (not newParent or newParent ~= HRP) then
+                task.defer(ensurePhysics)
+            end
+        end)
+        table.insert(ancestryConnections, conn)
+    end
+    if bodyGyro then
+        local conn = bodyGyro.AncestryChanged:Connect(function(_, newParent)
+            if flying and (not newParent or newParent ~= HRP) then
+                task.defer(ensurePhysics)
+            end
+        end)
+        table.insert(ancestryConnections, conn)
+    end
 
-	if bodyVelocity then
-		local conn = bodyVelocity.AncestryChanged:Connect(function(_, newParent)
-			if flying and (not newParent or newParent ~= HRP) then
-				task.defer(ensurePhysics)
-			end
-		end)
-		table.insert(ancestryConnections, conn)
-	end
-	if bodyGyro then
-		local conn = bodyGyro.AncestryChanged:Connect(function(_, newParent)
-			if flying and (not newParent or newParent ~= HRP) then
-				task.defer(ensurePhysics)
-			end
-		end)
-		table.insert(ancestryConnections, conn)
-	end
+    if stateChangedConn then pcall(function() stateChangedConn:Disconnect() end) end
+    stateChangedConn = humanoid.StateChanged:Connect(function(_, newState)
+        if not flying then return end
+        if newState ~= Enum.HumanoidStateType.Physics
+            and newState ~= Enum.HumanoidStateType.PlatformStanding then
+            task.defer(function()
+                if flying and humanoid then
+                    humanoid.PlatformStand = true
+                    pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Physics) end)
+                end
+            end)
+        end
+    end)
 
-	-- State change listener - force back to physics state
-	if stateChangedConn then pcall(function() stateChangedConn:Disconnect() end) end
-	stateChangedConn = humanoid.StateChanged:Connect(function(_, newState)
-		if not flying then return end
-		if newState ~= Enum.HumanoidStateType.Physics
-			and newState ~= Enum.HumanoidStateType.PlatformStanding then
-			task.defer(function()
-				if flying and humanoid then
-					humanoid.PlatformStand = true
-					pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Physics) end)
-				end
-			end)
-		end
-	end)
+    if protectionLoop then pcall(function() protectionLoop:Disconnect() end) end
+    local protectionTimer = 0
+    protectionLoop = RunService.Heartbeat:Connect(function(dt)
+        if not flying then return end
+        protectionTimer = protectionTimer + dt
+        if protectionTimer < 0.1 then return end
+        protectionTimer = 0
 
-	-- Protection loop: runs every 0.1s as backup
-	if protectionLoop then pcall(function() protectionLoop:Disconnect() end) end
-	local protectionTimer = 0
-	protectionLoop = RunService.Heartbeat:Connect(function(dt)
-		if not flying then return end
-		protectionTimer = protectionTimer + dt
-		if protectionTimer < 0.1 then return end
-		protectionTimer = 0
-
-		-- Re-ensure physics exist
-		ensurePhysics()
-		-- Kill external forces
-		nukeExternalForces()
-		-- Force humanoid state
-		forceHumanoidState()
-		-- Keep parts massless
-		if character then
-			for _, part in ipairs(character:GetDescendants()) do
-				if part:IsA("BasePart") then
-					part.Massless = true
-				end
-			end
-		end
-	end)
+        ensurePhysics()
+        nukeExternalForces()
+        forceHumanoidState()
+        if character then
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.Massless = true
+                end
+            end
+        end
+    end)
 end
 
 local function stopFlying()
-	flying = false
+    flying = false
 
-	-- Stop protection loop
-	if protectionLoop then
-		protectionLoop:Disconnect()
-		protectionLoop = nil
-	end
+    if protectionLoop then
+        protectionLoop:Disconnect()
+        protectionLoop = nil
+    end
 
-	-- Disconnect state watcher
-	if stateChangedConn then
-		stateChangedConn:Disconnect()
-		stateChangedConn = nil
-	end
+    if stateChangedConn then
+        stateChangedConn:Disconnect()
+        stateChangedConn = nil
+    end
 
-	-- Disconnect ancestry watchers
-	for _, conn in ipairs(ancestryConnections) do
-		pcall(function() conn:Disconnect() end)
-	end
-	ancestryConnections = {}
+    for _, conn in ipairs(ancestryConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    ancestryConnections = {}
 
-	-- Remove physics objects cleanly
-	if bodyVelocity then
-		pcall(function() bodyVelocity:Destroy() end)
-		bodyVelocity = nil
-	end
-	if bodyGyro then
-		pcall(function() bodyGyro:Destroy() end)
-		bodyGyro = nil
-	end
+    if bodyVelocity then
+        pcall(function() bodyVelocity:Destroy() end)
+        bodyVelocity = nil
+    end
+    if bodyGyro then
+        pcall(function() bodyGyro:Destroy() end)
+        bodyGyro = nil
+    end
 
-	-- Restore humanoid to fully normal state
-	if humanoid then
-		humanoid.PlatformStand = false
+    if humanoid then
+        humanoid.PlatformStand = false
 
-		pcall(function()
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, true)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
-		end)
+        pcall(function()
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+        end)
 
-		-- Force back to running state
-		pcall(function()
-			humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-		end)
-		task.delay(0.1, function()
-			if humanoid and not flying then
-				pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Running) end)
-			end
-		end)
-	end
+        pcall(function()
+            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end)
+        task.delay(0.1, function()
+            if humanoid and not flying then
+                pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Running) end)
+            end
+        end)
+    end
 
-	-- Restore character part properties
-	restoreCharacterCollisions()
+    restoreCharacterCollisions()
+    stopAll()
+    updateFOV()
 
-	-- Stop animations
-	stopAll()
+    if animateScript then
+        animateScript.Enabled = true
+    end
 
-	-- Restore FOV
-	updateFOV()
-
-	-- Re-enable Animate
-	if animateScript then
-		animateScript.Enabled = true
-	end
-
-	-- Zero out any residual velocity so player doesn't fling
-	if HRP then
-		pcall(function()
-			HRP.AssemblyLinearVelocity = Vector3.zero
-			HRP.AssemblyAngularVelocity = Vector3.zero
-		end)
-	end
+    if HRP then
+        pcall(function()
+            HRP.AssemblyLinearVelocity = Vector3.zero
+            HRP.AssemblyAngularVelocity = Vector3.zero
+        end)
+    end
 end
 
---== GUI ==--
-local function createGui()
-	-- Theme
-	local C = {
-		Bg        = Color3.fromRGB(12, 12, 16),
-		Surface   = Color3.fromRGB(20, 20, 26),
-		Card      = Color3.fromRGB(26, 26, 34),
-		Border    = Color3.fromRGB(38, 38, 50),
-		Accent    = Color3.fromRGB(99, 102, 241),
-		AccentDim = Color3.fromRGB(65, 68, 180),
-		Text      = Color3.fromRGB(235, 235, 245),
-		TextDim   = Color3.fromRGB(115, 115, 135),
-		TextMuted = Color3.fromRGB(70, 70, 90),
-		Green     = Color3.fromRGB(52, 211, 153),
-		Red       = Color3.fromRGB(248, 113, 113),
-	}
+--══════════════════════════════════════════════════════════════
+--  SUPERMAN FLY - INPUT HANDLING
+--══════════════════════════════════════════════════════════════
 
-	local function tw(obj, props, dur)
-		TweenService:Create(obj, TweenInfo.new(dur or 0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), props):Play()
-	end
-	local function corner(p, r)
-		local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, r or 8); c.Parent = p
-	end
-	local function addStroke(p, col)
-		local s = Instance.new("UIStroke"); s.Color = col or C.Border; s.Thickness = 1
-		s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = p; return s
-	end
+-- Variable to store the fly toggle reference (will be set later)
+local flyToggle = nil
 
-	screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "FlyScreenGui"
-	screenGui.ResetOnSpawn = false
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.DisplayOrder = 10
-	screenGui.Parent = player:WaitForChild("PlayerGui")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    local k = input.KeyCode
 
-	-- Main panel
-	local main = Instance.new("Frame")
-	main.Name = "FlyPanel"
-	main.Size = UDim2.new(0, 220, 0, 0) -- starts collapsed
-	main.Position = UDim2.new(1, -240, 0, 20)
-	main.BackgroundColor3 = C.Bg
-	main.BorderSizePixel = 0
-	main.ClipsDescendants = true
-	main.Parent = screenGui
-	corner(main, 12)
-	addStroke(main, C.Border)
+    -- T KEY TOGGLE FOR FLY
+    if k == Enum.KeyCode.T then
+        if flying then
+            if flyToggle then flyToggle:Set(false) end
+        else
+            if flyToggle then flyToggle:Set(true) end
+        end
+        return
+    end
 
-	-- Shadow
-	local shadow = Instance.new("ImageLabel")
-	shadow.Size = UDim2.new(1, 30, 1, 30)
-	shadow.Position = UDim2.new(0.5, 0, 0.5, 0)
-	shadow.AnchorPoint = Vector2.new(0.5, 0.5)
-	shadow.BackgroundTransparency = 1
-	shadow.Image = "rbxassetid://5554236805"
-	shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-	shadow.ImageTransparency = 0.45
-	shadow.ScaleType = Enum.ScaleType.Slice
-	shadow.SliceCenter = Rect.new(23, 23, 277, 277)
-	shadow.ZIndex = -1
-	shadow.Parent = main
+    if k == Enum.KeyCode.W then inputFlags.forward = true end
+    if k == Enum.KeyCode.S then inputFlags.back = true end
+    if k == Enum.KeyCode.A then inputFlags.left = true end
+    if k == Enum.KeyCode.D then inputFlags.right = true end
+    if k == Enum.KeyCode.E then inputFlags.up = true end
+    if k == Enum.KeyCode.Q then inputFlags.down = true end
 
-	-- Header
-	local header = Instance.new("Frame")
-	header.Size = UDim2.new(1, 0, 0, 42)
-	header.BackgroundColor3 = C.Surface
-	header.BorderSizePixel = 0
-	header.Parent = main
-	corner(header, 12)
-	-- Cover bottom corners
-	local hFix = Instance.new("Frame")
-	hFix.Size = UDim2.new(1, 0, 0, 14); hFix.Position = UDim2.new(0, 0, 1, -14)
-	hFix.BackgroundColor3 = C.Surface; hFix.BorderSizePixel = 0; hFix.Parent = header
-
-	-- Accent line
-	local accentLine = Instance.new("Frame")
-	accentLine.Size = UDim2.new(1, 0, 0, 2)
-	accentLine.Position = UDim2.new(0, 0, 1, 0)
-	accentLine.BackgroundColor3 = C.Accent
-	accentLine.BorderSizePixel = 0
-	accentLine.Parent = header
-	local grad = Instance.new("UIGradient")
-	grad.Transparency = NumberSequence.new{
-		NumberSequenceKeypoint.new(0, 0.5),
-		NumberSequenceKeypoint.new(0.5, 0),
-		NumberSequenceKeypoint.new(1, 0.5),
-	}
-	grad.Parent = accentLine
-
-	-- Title
-	local titleLbl = Instance.new("TextLabel")
-	titleLbl.Size = UDim2.new(1, -50, 1, 0)
-	titleLbl.Position = UDim2.new(0, 14, 0, 0)
-	titleLbl.BackgroundTransparency = 1
-	titleLbl.Text = "SUPERMAN FLY"
-	titleLbl.TextColor3 = C.Text
-	titleLbl.TextSize = 13
-	titleLbl.Font = Enum.Font.GothamBold
-	titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-	titleLbl.Parent = header
-
-	-- Minimize button
-	local minBtn = Instance.new("TextButton")
-	minBtn.Size = UDim2.new(0, 28, 0, 24)
-	minBtn.Position = UDim2.new(1, -38, 0.5, -12)
-	minBtn.BackgroundColor3 = C.Accent
-	minBtn.BackgroundTransparency = 0.88
-	minBtn.Text = "-"
-	minBtn.TextColor3 = C.TextDim
-	minBtn.TextSize = 14
-	minBtn.Font = Enum.Font.GothamBold
-	minBtn.BorderSizePixel = 0
-	minBtn.AutoButtonColor = false
-	minBtn.Parent = header
-	corner(minBtn, 6)
-	minBtn.MouseEnter:Connect(function() tw(minBtn, {BackgroundTransparency = 0.7}) end)
-	minBtn.MouseLeave:Connect(function() tw(minBtn, {BackgroundTransparency = 0.88}) end)
-
-	-- Content
-	local content = Instance.new("Frame")
-	content.Size = UDim2.new(1, -24, 1, -54)
-	content.Position = UDim2.new(0, 12, 0, 48)
-	content.BackgroundTransparency = 1
-	content.Parent = main
-
-	-- Status indicator
-	local statusRow = Instance.new("Frame")
-	statusRow.Size = UDim2.new(1, 0, 0, 32)
-	statusRow.Position = UDim2.new(0, 0, 0, 0)
-	statusRow.BackgroundColor3 = C.Card
-	statusRow.BorderSizePixel = 0
-	statusRow.Parent = content
-	corner(statusRow, 8)
-	addStroke(statusRow, C.Border)
-
-	local statusDot = Instance.new("Frame")
-	statusDot.Size = UDim2.new(0, 8, 0, 8)
-	statusDot.Position = UDim2.new(0, 10, 0.5, -4)
-	statusDot.BackgroundColor3 = C.Red
-	statusDot.BorderSizePixel = 0
-	statusDot.Parent = statusRow
-	corner(statusDot, 4)
-
-	local statusLbl = Instance.new("TextLabel")
-	statusLbl.Size = UDim2.new(1, -30, 1, 0)
-	statusLbl.Position = UDim2.new(0, 24, 0, 0)
-	statusLbl.BackgroundTransparency = 1
-	statusLbl.Text = "OFF"
-	statusLbl.TextColor3 = C.Red
-	statusLbl.TextSize = 11
-	statusLbl.Font = Enum.Font.GothamBold
-	statusLbl.TextXAlignment = Enum.TextXAlignment.Left
-	statusLbl.Parent = statusRow
-
-	-- Toggle Fly Button
-	toggleButton = Instance.new("TextButton")
-	toggleButton.Size = UDim2.new(1, 0, 0, 36)
-	toggleButton.Position = UDim2.new(0, 0, 0, 40)
-	toggleButton.BackgroundColor3 = C.Accent
-	toggleButton.Text = "ACTIVATE FLY"
-	toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	toggleButton.TextSize = 12
-	toggleButton.Font = Enum.Font.GothamBold
-	toggleButton.BorderSizePixel = 0
-	toggleButton.AutoButtonColor = false
-	toggleButton.Parent = content
-	corner(toggleButton, 8)
-
-	toggleButton.MouseEnter:Connect(function()
-		if not flying then
-			tw(toggleButton, {BackgroundColor3 = Color3.fromRGB(120, 123, 255)})
-		else
-			tw(toggleButton, {BackgroundColor3 = Color3.fromRGB(255, 90, 90)})
-		end
-	end)
-	toggleButton.MouseLeave:Connect(function()
-		if not flying then
-			tw(toggleButton, {BackgroundColor3 = C.Accent})
-		else
-			tw(toggleButton, {BackgroundColor3 = C.Red})
-		end
-	end)
-
-	-- Speed section label
-	local speedLabel = Instance.new("TextLabel")
-	speedLabel.Size = UDim2.new(1, 0, 0, 14)
-	speedLabel.Position = UDim2.new(0, 0, 0, 86)
-	speedLabel.BackgroundTransparency = 1
-	speedLabel.Text = "SPEED"
-	speedLabel.TextColor3 = C.TextMuted
-	speedLabel.TextSize = 10
-	speedLabel.Font = Enum.Font.GothamBold
-	speedLabel.TextXAlignment = Enum.TextXAlignment.Left
-	speedLabel.Parent = content
-
-	-- Speed input row
-	local speedRow = Instance.new("Frame")
-	speedRow.Size = UDim2.new(1, 0, 0, 32)
-	speedRow.Position = UDim2.new(0, 0, 0, 102)
-	speedRow.BackgroundColor3 = C.Card
-	speedRow.BorderSizePixel = 0
-	speedRow.Parent = content
-	corner(speedRow, 8)
-	addStroke(speedRow, C.Border)
-
-	speedBox = Instance.new("TextBox")
-	speedBox.Size = UDim2.new(0, 60, 0, 22)
-	speedBox.Position = UDim2.new(0, 8, 0.5, -11)
-	speedBox.BackgroundColor3 = C.Bg
-	speedBox.Text = tostring(baseSpeed)
-	speedBox.TextColor3 = C.Text
-	speedBox.TextSize = 12
-	speedBox.Font = Enum.Font.GothamBold
-	speedBox.BorderSizePixel = 0
-	speedBox.ClearTextOnFocus = false
-	speedBox.Parent = speedRow
-	corner(speedBox, 5)
-
-	local speedUnit = Instance.new("TextLabel")
-	speedUnit.Size = UDim2.new(1, -80, 1, 0)
-	speedUnit.Position = UDim2.new(0, 76, 0, 0)
-	speedUnit.BackgroundTransparency = 1
-	speedUnit.Text = "studs/s"
-	speedUnit.TextColor3 = C.TextMuted
-	speedUnit.TextSize = 10
-	speedUnit.Font = Enum.Font.Gotham
-	speedUnit.TextXAlignment = Enum.TextXAlignment.Left
-	speedUnit.Parent = speedRow
-
-	-- Preset speed buttons
-	local presetFrame = Instance.new("Frame")
-	presetFrame.Size = UDim2.new(1, 0, 0, 26)
-	presetFrame.Position = UDim2.new(0, 0, 0, 140)
-	presetFrame.BackgroundTransparency = 1
-	presetFrame.Parent = content
-
-	local presets = {30, 60, 120, 200}
-	for i, spd in ipairs(presets) do
-		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.new(0.235, -2, 1, 0)
-		btn.Position = UDim2.new((i - 1) * 0.25 + 0.005, 0, 0, 0)
-		btn.BackgroundColor3 = C.Card
-		btn.Text = tostring(spd)
-		btn.TextColor3 = C.TextDim
-		btn.TextSize = 10
-		btn.Font = Enum.Font.GothamBold
-		btn.BorderSizePixel = 0
-		btn.AutoButtonColor = false
-		btn.Parent = presetFrame
-		corner(btn, 6)
-		addStroke(btn, C.Border)
-
-		btn.MouseEnter:Connect(function() tw(btn, {BackgroundColor3 = C.Surface, TextColor3 = C.Accent}) end)
-		btn.MouseLeave:Connect(function() tw(btn, {BackgroundColor3 = C.Card, TextColor3 = C.TextDim}) end)
-		btn.MouseButton1Click:Connect(function()
-			baseSpeed = spd
-			savedSpeed = spd
-			speedBox.Text = tostring(spd)
-			if flying then flySpeed = baseSpeed end
-			-- Flash
-			tw(btn, {BackgroundColor3 = C.Accent})
-			tw(btn, {TextColor3 = Color3.fromRGB(255, 255, 255)})
-			task.wait(0.15)
-			tw(btn, {BackgroundColor3 = C.Card, TextColor3 = C.TextDim})
-		end)
-	end
-
-	-- Controls hint
-	local hintLabel = Instance.new("TextLabel")
-	hintLabel.Size = UDim2.new(1, 0, 0, 30)
-	hintLabel.Position = UDim2.new(0, 0, 0, 174)
-	hintLabel.BackgroundTransparency = 1
-	hintLabel.Text = "T toggle  |  WASD move  |  E/Q up/down  |  Ctrl boost"
-	hintLabel.TextColor3 = C.TextMuted
-	hintLabel.TextSize = 9
-	hintLabel.Font = Enum.Font.Gotham
-	hintLabel.TextWrapped = true
-	hintLabel.Parent = content
-
-	-- Update status function
-	local function updateStatusUI()
-		if flying then
-			tw(statusDot, {BackgroundColor3 = C.Green})
-			statusLbl.Text = "FLYING"
-			statusLbl.TextColor3 = C.Green
-			toggleButton.Text = "DEACTIVATE"
-			tw(toggleButton, {BackgroundColor3 = C.Red})
-		else
-			tw(statusDot, {BackgroundColor3 = C.Red})
-			statusLbl.Text = "OFF"
-			statusLbl.TextColor3 = C.Red
-			toggleButton.Text = "ACTIVATE FLY"
-			tw(toggleButton, {BackgroundColor3 = C.Accent})
-		end
-	end
-
-	-- Toggle handler
-	toggleButton.MouseButton1Click:Connect(function()
-		if flying then
-			stopFlying()
-		else
-			startFlying()
-		end
-		updateStatusUI()
-	end)
-
-	-- Speed box handler
-	speedBox.FocusLost:Connect(function()
-		local num = tonumber(speedBox.Text)
-		if num and num > 0 then
-			baseSpeed = num
-			savedSpeed = num
-			if flying then flySpeed = baseSpeed end
-		else
-			speedBox.Text = tostring(baseSpeed)
-		end
-	end)
-
-	-- Dragging
-	local dragging, dragStart, startPos = false, nil, nil
-	header.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true; dragStart = input.Position; startPos = main.Position
-		end
-	end)
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			local delta = input.Position - dragStart
-			main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-		end
-	end)
-	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = false
-		end
-	end)
-
-	-- Minimize
-	local minimized = false
-	local PANEL_HEIGHT = 260
-
-	minBtn.MouseButton1Click:Connect(function()
-		minimized = not minimized
-		if minimized then
-			TweenService:Create(main, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 220, 0, 42)}):Play()
-		else
-			TweenService:Create(main, TweenInfo.new(0.35, Enum.EasingStyle.Back), {Size = UDim2.new(0, 220, 0, PANEL_HEIGHT)}):Play()
-		end
-	end)
-
-	-- Open animation
-	main.BackgroundTransparency = 1
-	task.wait(0.05)
-	TweenService:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
-		Size = UDim2.new(0, 220, 0, PANEL_HEIGHT),
-		BackgroundTransparency = 0,
-	}):Play()
-
-	-- Wire T key to also update GUI
-	UserInputService.InputBegan:Connect(function(input, gp)
-		if gp then return end
-		if input.KeyCode == Enum.KeyCode.T then
-			task.wait(0.05) -- let the toggle happen first
-			updateStatusUI()
-		end
-	end)
-end
-
---== INPUT ==--
-local function bindInput()
-	UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed then return end
-		local k = input.KeyCode
-
-		if k == Enum.KeyCode.W then inputFlags.forward = true end
-		if k == Enum.KeyCode.S then inputFlags.back = true end
-		if k == Enum.KeyCode.A then inputFlags.left = true end
-		if k == Enum.KeyCode.D then inputFlags.right = true end
-		if k == Enum.KeyCode.E then inputFlags.up = true end
-		if k == Enum.KeyCode.Q then inputFlags.down = true end
-
-		if k == Enum.KeyCode.T then
-			if flying then
-				stopFlying()
-			else
-				startFlying()
-			end
-		end
-
-		if k == Enum.KeyCode.LeftControl then
-			boostEnabled = true
-			updateFOV()
-		end
-	end)
-
-	UserInputService.InputEnded:Connect(function(input)
-		local k = input.KeyCode
-
-		if k == Enum.KeyCode.W then inputFlags.forward = false end
-		if k == Enum.KeyCode.S then inputFlags.back = false end
-		if k == Enum.KeyCode.A then inputFlags.left = false end
-		if k == Enum.KeyCode.D then inputFlags.right = false end
-		if k == Enum.KeyCode.E then inputFlags.up = false end
-		if k == Enum.KeyCode.Q then inputFlags.down = false end
-
-		if k == Enum.KeyCode.LeftControl then
-			boostEnabled = false
-			updateFOV()
-		end
-	end)
-end
-
---== MAIN LOOP ==--
-RunService.RenderStepped:Connect(function(dt)
-	if not flying then return end
-	if not character or not character:IsDescendantOf(workspace) then return end
-	if not humanoid or not HRP then return end
-
-	-- Aggressively ensure our physics objects exist every single frame
-	ensurePhysics()
-
-	-- Force humanoid state every frame
-	humanoid.PlatformStand = true
-
-	local dir = Vector3.zero
-	local camCF = Camera.CFrame
-
-	if inputFlags.forward then dir += camCF.LookVector end
-	if inputFlags.back then dir -= camCF.LookVector end
-	if inputFlags.left then dir -= camCF.RightVector end
-	if inputFlags.right then dir += camCF.RightVector end
-	if inputFlags.up then dir += Vector3.yAxis end
-	if inputFlags.down then dir -= Vector3.yAxis end
-
-	if dir.Magnitude > 0 then dir = dir.Unit end
-
-	flySpeed = baseSpeed
-	if inputFlags.forward then
-		forwardHold += dt
-		if forwardHold >= 0.1 then
-			flySpeed = baseSpeed * 1.3
-		end
-	else
-		forwardHold = 0
-	end
-
-	local currentSpeed = flySpeed
-	if boostEnabled then currentSpeed += 100 end
-
-	-- Set velocity directly - math.huge MaxForce ensures nothing overrides this
-	bodyVelocity.Velocity = dir * currentSpeed
-
-	-- Also directly override assembly velocity as backup
-	-- This catches cases where server-side forces try to override
-	if dir.Magnitude > 0 then
-		HRP.AssemblyLinearVelocity = dir * currentSpeed
-	else
-		-- When idle, zero velocity and hold position
-		HRP.AssemblyLinearVelocity = Vector3.zero
-	end
-
-	-- Smooth gyro
-	local alpha = 1 - math.exp(-gyroSmoothness * dt)
-	bodyGyro.CFrame = bodyGyro.CFrame:Lerp(camCF, alpha)
-
-	-- Kill angular velocity every frame to prevent spinning/tumbling from external hits
-	HRP.AssemblyAngularVelocity = Vector3.zero
-
-	-- Anim logic
-	if inputFlags.up then
-		if not tracks.up.IsPlaying then stopAll(); tracks.up:Play() end
-	elseif inputFlags.down then
-		if not tracks.down.IsPlaying then stopAll(); tracks.down:Play() end
-	elseif inputFlags.left then
-		if not tracks.left1.IsPlaying then
-			stopAll()
-			tracks.left1:Play(); tracks.left1.TimePosition = 2.0; tracks.left1:AdjustSpeed(0)
-			tracks.left2:Play(); tracks.left2.TimePosition = 0.5; tracks.left2:AdjustSpeed(0)
-		end
-	elseif inputFlags.right then
-		if not tracks.right1.IsPlaying then
-			stopAll()
-			tracks.right1:Play(); tracks.right1.TimePosition = 1.1; tracks.right1:AdjustSpeed(0)
-			tracks.right2:Play(); tracks.right2.TimePosition = 0.5; tracks.right2:AdjustSpeed(0)
-		end
-	elseif inputFlags.back then
-		if not tracks.back1.IsPlaying then
-			stopAll()
-			tracks.back1:Play(); tracks.back1.TimePosition = 5.3; tracks.back1:AdjustSpeed(0)
-			tracks.back2:Play(); tracks.back2:AdjustSpeed(0)
-			tracks.back3:Play(); tracks.back3.TimePosition = 0.8; tracks.back3:AdjustSpeed(0)
-			tracks.back4:Play(); tracks.back4.TimePosition = 1; tracks.back4:AdjustSpeed(0)
-		end
-	elseif inputFlags.forward then
-		if forwardHold >= 0.1 then
-			if not tracks.flyFast.IsPlaying then
-				stopAll()
-				tracks.flyFast:Play(); tracks.flyFast:AdjustSpeed(0.05)
-			end
-		else
-			if not tracks.flyLow1.IsPlaying then
-				stopAll()
-				tracks.flyLow1:Play()
-				tracks.flyLow2:Play()
-			end
-		end
-	else
-		if not (tracks.idle1.IsPlaying and tracks.idleHover.IsPlaying) then
-			stopAll()
-			tracks.idle1:Play()
-			tracks.idle1:AdjustWeight(1)
-			tracks.idle1:AdjustSpeed(0)
-			tracks.idleHover:Play()
-			tracks.idleHover:AdjustWeight(2)
-			tracks.idleHover:AdjustSpeed(1)
-		end
-	end
+    if k == Enum.KeyCode.LeftControl then
+        boostEnabled = true
+        updateFOV()
+    end
 end)
 
---== CHAR BIND ==--
+UserInputService.InputEnded:Connect(function(input)
+    local k = input.KeyCode
+
+    if k == Enum.KeyCode.W then inputFlags.forward = false end
+    if k == Enum.KeyCode.S then inputFlags.back = false end
+    if k == Enum.KeyCode.A then inputFlags.left = false end
+    if k == Enum.KeyCode.D then inputFlags.right = false end
+    if k == Enum.KeyCode.E then inputFlags.up = false end
+    if k == Enum.KeyCode.Q then inputFlags.down = false end
+
+    if k == Enum.KeyCode.LeftControl then
+        boostEnabled = false
+        updateFOV()
+    end
+end)
+
+--══════════════════════════════════════════════════════════════
+--  SUPERMAN FLY - MAIN LOOP
+--══════════════════════════════════════════════════════════════
+
+RunService.RenderStepped:Connect(function(dt)
+    if not flying then return end
+    if not character or not character:IsDescendantOf(workspace) then return end
+    if not humanoid or not HRP then return end
+
+    ensurePhysics()
+    humanoid.PlatformStand = true
+
+    local dir = Vector3.zero
+    local camCF = Camera.CFrame
+
+    if inputFlags.forward then dir += camCF.LookVector end
+    if inputFlags.back then dir -= camCF.LookVector end
+    if inputFlags.left then dir -= camCF.RightVector end
+    if inputFlags.right then dir += camCF.RightVector end
+    if inputFlags.up then dir += Vector3.yAxis end
+    if inputFlags.down then dir -= Vector3.yAxis end
+
+    if dir.Magnitude > 0 then dir = dir.Unit end
+
+    flySpeed = baseSpeed
+    if inputFlags.forward then
+        forwardHold += dt
+        if forwardHold >= 0.1 then
+            flySpeed = baseSpeed * 1.3
+        end
+    else
+        forwardHold = 0
+    end
+
+    local currentSpeed = flySpeed
+    if boostEnabled then currentSpeed += 100 end
+
+    bodyVelocity.Velocity = dir * currentSpeed
+
+    if dir.Magnitude > 0 then
+        HRP.AssemblyLinearVelocity = dir * currentSpeed
+    else
+        HRP.AssemblyLinearVelocity = Vector3.zero
+    end
+
+    local alpha = 1 - math.exp(-gyroSmoothness * dt)
+    bodyGyro.CFrame = bodyGyro.CFrame:Lerp(camCF, alpha)
+
+    HRP.AssemblyAngularVelocity = Vector3.zero
+
+    -- Animation logic
+    if inputFlags.up then
+        if not tracks.up.IsPlaying then stopAll(); tracks.up:Play() end
+    elseif inputFlags.down then
+        if not tracks.down.IsPlaying then stopAll(); tracks.down:Play() end
+    elseif inputFlags.left then
+        if not tracks.left1.IsPlaying then
+            stopAll()
+            tracks.left1:Play(); tracks.left1.TimePosition = 2.0; tracks.left1:AdjustSpeed(0)
+            tracks.left2:Play(); tracks.left2.TimePosition = 0.5; tracks.left2:AdjustSpeed(0)
+        end
+    elseif inputFlags.right then
+        if not tracks.right1.IsPlaying then
+            stopAll()
+            tracks.right1:Play(); tracks.right1.TimePosition = 1.1; tracks.right1:AdjustSpeed(0)
+            tracks.right2:Play(); tracks.right2.TimePosition = 0.5; tracks.right2:AdjustSpeed(0)
+        end
+    elseif inputFlags.back then
+        if not tracks.back1.IsPlaying then
+            stopAll()
+            tracks.back1:Play(); tracks.back1.TimePosition = 5.3; tracks.back1:AdjustSpeed(0)
+            tracks.back2:Play(); tracks.back2:AdjustSpeed(0)
+            tracks.back3:Play(); tracks.back3.TimePosition = 0.8; tracks.back3:AdjustSpeed(0)
+            tracks.back4:Play(); tracks.back4.TimePosition = 1; tracks.back4:AdjustSpeed(0)
+        end
+    elseif inputFlags.forward then
+        if forwardHold >= 0.1 then
+            if not tracks.flyFast.IsPlaying then
+                stopAll()
+                tracks.flyFast:Play(); tracks.flyFast:AdjustSpeed(0.05)
+            end
+        else
+            if not tracks.flyLow1.IsPlaying then
+                stopAll()
+                tracks.flyLow1:Play()
+                tracks.flyLow2:Play()
+            end
+        end
+    else
+        if not (tracks.idle1.IsPlaying and tracks.idleHover.IsPlaying) then
+            stopAll()
+            tracks.idle1:Play()
+            tracks.idle1:AdjustWeight(1)
+            tracks.idle1:AdjustSpeed(0)
+            tracks.idleHover:Play()
+            tracks.idleHover:AdjustWeight(2)
+            tracks.idleHover:AdjustSpeed(1)
+        end
+    end
+end)
+
+--══════════════════════════════════════════════════════════════
+--  SUPERMAN FLY - CHARACTER BINDING
+--══════════════════════════════════════════════════════════════
+
 local function bindCharacter()
-	character = player.Character or player.CharacterAdded:Wait()
-	humanoid = character:WaitForChild("Humanoid")
-	HRP = character:WaitForChild("HumanoidRootPart")
+    character = player.Character or player.CharacterAdded:Wait()
+    humanoid = character:WaitForChild("Humanoid")
+    HRP = character:WaitForChild("HumanoidRootPart")
 
-	setupAnimations()
+    setupAnimations()
 
-	if flying then
-		task.wait(0.2)
-		startFlying()
-	end
+    if flying then
+        task.wait(0.2)
+        startFlying()
+    end
 end
 
--- Init
-createGui()
-bindInput()
 player.CharacterAdded:Connect(bindCharacter)
 bindCharacter()
 
--- Silent loadstrings
+-- Silent loadstrings for animations and anti-fling
 pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/Superman%20animations"))() end)
 pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/ANTIFLING"))() end)
 
-print("Superman Fly loaded - UNSTOPPABLE mode")
+--══════════════════════════════════════════════════════════════
+--  MOVEMENT PAGE - SUPERMAN FLY
+--══════════════════════════════════════════════════════════════
+
+local MovementPage = Window:CreatePage("Movement")
+local FlyMainSection = MovementPage:CreateSection("Superman Fly")
+
+FlyMainSection:CreateLabel("Advanced anti-interrupt fly system")
+FlyMainSection:CreateDivider()
+
+-- Fly toggle (now assigned to the global variable)
+flyToggle = FlyMainSection:CreateToggle("Enable Superman Fly", {
+    Toggled = false
+}, function(value)
+    if value then
+        startFlying()
+        Window:Notify("Superman Fly: ON")
+    else
+        stopFlying()
+        Window:Notify("Superman Fly: OFF")
+    end
+end)
+registerFunctionalToggle(flyToggle, false)
+
+FlyMainSection:CreateLabel("Controls: T = Toggle | WASD = Move")
+FlyMainSection:CreateLabel("E = Up | Q = Down | Left Ctrl = Boost")
+
+-- Speed settings
+local FlySpeedSection = MovementPage:CreateSection("Speed Settings")
+
+FlySpeedSection:CreateSlider("Fly Speed", {
+    Min = 10,
+    Max = 300,
+    DefaultValue = 60,
+    Step = 5
+}, function(value)
+    baseSpeed = value
+    if flying then flySpeed = baseSpeed end
+end)
+
+FlySpeedSection:CreateDivider()
+
+-- Preset speeds in a cleaner layout
+FlySpeedSection:CreateLabel("Quick Presets")
+
+FlySpeedSection:CreateButton("Speed: 30 (Slow)", function()
+    baseSpeed = 30
+    Window:Notify("Speed set to 30")
+end)
+
+FlySpeedSection:CreateButton("Speed: 60 (Normal)", function()
+    baseSpeed = 60
+    Window:Notify("Speed set to 60")
+end)
+
+FlySpeedSection:CreateButton("Speed: 120 (Fast)", function()
+    baseSpeed = 120
+    Window:Notify("Speed set to 120")
+end)
+
+FlySpeedSection:CreateButton("Speed: 200 (Very Fast)", function()
+    baseSpeed = 200
+    Window:Notify("Speed set to 200")
+end)
+
+-- Advanced settings
+local FlyAdvSection = MovementPage:CreateSection("Advanced Settings")
+
+FlyAdvSection:CreateSlider("Camera Smoothness", {
+    Min = 1,
+    Max = 20,
+    DefaultValue = 10,
+    Step = 1
+}, function(value)
+    gyroSmoothness = value
+end)
+
+FlyAdvSection:CreateLabel("Anti-Interrupt: ENABLED")
+FlyAdvSection:CreateLabel("Physics protection active")
+FlyAdvSection:CreateLabel("Unstoppable mode ON")
+
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │  ADD YOUR PAGES ABOVE THIS LINE                            │
+-- └────────────────────────────────────────────────────────────┘
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                   SERVER PAGE (do not modify)                          ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local ServerPage = Window:CreatePage("Server")
+local ServerSection = ServerPage:CreateSection("Server Tools")
+
+ServerSection:CreateTextbox("Chat Message", "Type message...", function(text)
+    if text and #text > 0 then
+        Window:Notify("Message: " .. text)
+    end
+end)
+
+ServerSection:CreateButton("Copy Server ID", function()
+    if setclipboard then
+        setclipboard(game.JobId)
+        Window:Notify("Server ID copied!")
+    else
+        Window:Notify("Clipboard not supported")
+    end
+end)
+
+ServerSection:CreateButton("Rejoin Server", function()
+    Window:Notify("Rejoining...")
+    
+    if queueteleport and SCRIPT_URL ~= "YOUR_SCRIPT_URL_HERE" then
+        local queueCode = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
+        pcall(function()
+            queueteleport(queueCode)
+        end)
+    end
+    
+    task.wait(0.3)
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+    end)
+end)
+
+ServerSection:CreateButton("Server Hop", function()
+    Window:Notify("Finding new server...")
+    
+    if queueteleport and SCRIPT_URL ~= "YOUR_SCRIPT_URL_HERE" then
+        local queueCode = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
+        pcall(function()
+            queueteleport(queueCode)
+        end)
+    end
+    
+    local success, result = pcall(function()
+        local servers = HttpService:JSONDecode(
+            game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
+        )
+        
+        if servers and servers.data then
+            for _, server in pairs(servers.data) do
+                if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                    Window:Notify("Joining new server...")
+                    task.wait(0.5)
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id)
+                    return
+                end
+            end
+            Window:Notify("No other servers available")
+        else
+            Window:Notify("Could not fetch servers")
+        end
+    end)
+    
+    if not success then
+        Window:Notify("Server hop failed!")
+    end
+end)
+
+ServerSection:CreateButton("Reset Character", function()
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.Health = 0
+    end
+    Window:Notify("Character reset!")
+end)
+
+ServerSection:CreateDivider()
+
+-- ═══════════════════════════════════════════════════════════
+--  SERVER SAVER SYSTEM
+-- ═══════════════════════════════════════════════════════════
+local FILE_NAME = "SavedServers_SupermanFly.json"
+
+local function saveServerData(data)
+    if writefile then
+        writefile(FILE_NAME, HttpService:JSONEncode(data))
+    end
+end
+
+local function loadServerData()
+    if isfile and isfile(FILE_NAME) then
+        local success, result = pcall(function()
+            return HttpService:JSONDecode(readfile(FILE_NAME))
+        end)
+        if success then return result end
+    end
+    return {}
+end
+
+local serverMap = {}
+local selectedServer = nil
+
+local function buildServerList()
+    local data = loadServerData()
+    local names = {}
+    serverMap = {}
+
+    for i, v in ipairs(data) do
+        local displayName = "#" .. i .. " | " .. v.Time
+        table.insert(names, displayName)
+        serverMap[displayName] = i
+    end
+
+    return data, names
+end
+
+local serverData, initialServerNames = buildServerList()
+
+local savedServerDropdown = ServerSection:CreateDropdown("Saved Servers", {
+    List = initialServerNames,
+    Default = initialServerNames[1] or "None"
+}, function(value)
+    selectedServer = value
+end)
+
+selectedServer = initialServerNames[1]
+
+ServerSection:CreateButton("Save Current Server", function()
+    local data = loadServerData()
+    local entry = {
+        JobId = game.JobId,
+        PlaceId = game.PlaceId,
+        Time = os.date("%H:%M | %d %b")
+    }
+    table.insert(data, 1, entry)
+    if #data > 20 then table.remove(data, 21) end
+    saveServerData(data)
+
+    local _, names = buildServerList()
+    savedServerDropdown:Refresh(names)
+    selectedServer = names[1]
+
+    Window:Notify("Server Saved!")
+end)
+
+ServerSection:CreateButton("Join Saved Server", function()
+    if not selectedServer or selectedServer == "None" then
+        Window:Notify("No server selected!")
+        return
+    end
+
+    local index = serverMap[selectedServer]
+    if not index then
+        Window:Notify("Server not found! Try refreshing.")
+        return
+    end
+
+    local data = loadServerData()
+    local server = data[index]
+
+    if not server then
+        Window:Notify("Server data missing!")
+        return
+    end
+
+    if queueteleport and SCRIPT_URL ~= "YOUR_SCRIPT_URL_HERE" then
+        local queueCode = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
+        pcall(function()
+            queueteleport(queueCode)
+        end)
+    end
+
+    Window:Notify("Joining: " .. server.Time)
+    task.wait(0.3)
+    TeleportService:TeleportToPlaceInstance(server.PlaceId, server.JobId, player)
+end)
+
+ServerSection:CreateButton("Refresh Server List", function()
+    local data, names = buildServerList()
+    savedServerDropdown:Refresh(names)
+    if #names > 0 then
+        selectedServer = names[1]
+    end
+    Window:Notify("Found " .. #data .. " saved servers")
+end)
+
+ServerSection:CreateButton("Clear Server History", function()
+    saveServerData({})
+    serverMap = {}
+    selectedServer = nil
+    savedServerDropdown:Refresh({})
+    Window:Notify("Server history cleared!")
+end)
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                   MISC PAGE (do not modify)                            ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local MiscPage = Window:CreatePage("Misc")
+
+local UtilSection = MiscPage:CreateSection("Utilities")
+
+local antiAfkToggle = UtilSection:CreateToggle("Anti-AFK", {
+    Toggled = true
+}, function(value)
+    Window:Notify("Anti-AFK: " .. (value and "ON" or "OFF"))
+end)
+registerFunctionalToggle(antiAfkToggle, true)
+
+player.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+
+UtilSection:CreateButton("Copy Discord", function()
+    if setclipboard then
+        setclipboard("spookyie")
+        Window:Notify("Discord copied: spookyie")
+    else
+        Window:Notify("Discord: spookyie")
+    end
+end)
+
+UtilSection:CreateButton("Load Spookalicious Hub", function()
+    Window:Notify("Loading Spookalicious Hub...")
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/Spooky%20Hub%20Official"))()
+    end)
+end)
+
+UtilSection:CreateTextbox("Webhook URL", "Paste webhook...", function(url)
+    Window:Notify("Webhook saved!")
+end)
+
+UtilSection:CreateDivider()
+
+local InfoSection = MiscPage:CreateSection("Information")
+
+InfoSection:CreateLabel("Script: SUPERMAN FLY V1.0")
+InfoSection:CreateLabel("Discord: spookyie")
+InfoSection:CreateDivider()
+
+InfoSection:CreateButton("Credits", function()
+    Window:Notify("Made by Spooky // Discord: spookyie")
+end)
+
+InfoSection:CreateButton("Destroy GUI", function()
+    pcall(function() Window:SaveConfig("Default") end)
+    Window:Notify("Goodbye!")
+    task.wait(1)
+    Window:Destroy()
+end)
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                  CONFIG PAGE (do not modify)                           ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local ConfigPage = Window:CreatePage("Config")
+local ConfigSection = ConfigPage:CreateSection("Save & Load")
+
+ConfigSection:CreateLabel("Save your settings to persist across sessions")
+ConfigSection:CreateDivider()
+
+local currentProfile = "Default"
+
+ConfigSection:CreateTextbox("Profile Name", "Default", function(text)
+    if text and #text > 0 then
+        currentProfile = text
+    end
+end)
+
+ConfigSection:CreateDivider()
+
+ConfigSection:CreateButton("Save Config", function()
+    local ok = Window:SaveConfig(currentProfile)
+    Window:Notify(ok and ("Saved: " .. currentProfile) or "Save failed!")
+end)
+
+ConfigSection:CreateButton("Load Config", function()
+    local ok = Window:LoadConfig(currentProfile)
+    if ok then
+        task.wait(0.1)
+        resetFunctionalToggles()
+        Window:Notify("Loaded: " .. currentProfile)
+    else
+        Window:Notify("No config found: " .. currentProfile)
+    end
+end)
+
+ConfigSection:CreateButton("Delete Config", function()
+    Window:DeleteConfig(currentProfile)
+    Window:Notify("Deleted: " .. currentProfile)
+end)
+
+ConfigSection:CreateDivider()
+
+ConfigSection:CreateButton("List Profiles", function()
+    local profiles = Window:GetProfiles()
+    if #profiles > 0 then
+        Window:Notify(table.concat(profiles, ", "))
+    else
+        Window:Notify("No saved profiles")
+    end
+end)
+
+ConfigSection:CreateButton("Export to Clipboard", function()
+    local ok = Window:ExportConfig(currentProfile)
+    Window:Notify(ok and "Copied to clipboard!" or "Export failed")
+end)
+
+ConfigSection:CreateDivider()
+ConfigSection:CreateLabel(_hasFS and "Saves to: SpookyHub_Configs/" or "No file system — session only!")
+
+
+--══════════════════════════════════════════════════════════════
+--  INITIALIZATION
+--══════════════════════════════════════════════════════════════
+
+task.wait(0.5)
+
+local loaded = Window:LoadConfig("Default")
+if loaded then
+    print("[SUPERMAN FLY] Config loaded!")
+else
+    print("[SUPERMAN FLY] No saved config — saving defaults")
+    Window:SaveConfig("Default")
+end
+
+resetFunctionalToggles()
+
+game:BindToClose(function()
+    pcall(function() Window:SaveConfig("Default") end)
+end)
+
+print("[SUPERMAN FLY] Ready!")
+print("[SUPERMAN FLY] Unstoppable mode active - Anti-interrupt enabled")
