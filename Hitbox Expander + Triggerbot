@@ -1,121 +1,261 @@
 --[[
-    ================================================================
-    =                   SPOOKALICIOUS V4                           =
-    =              HITBOX EXPANDER + TRIGGERBOT                    =
-    ================================================================
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║               SPOOKALICIOUS V4 — DEVELOPER TEMPLATE                          ║
+║                                                                              ║
+║   This template shows you how to build a full hub using the                  ║
+║   Spookalicious V4 API. It comes pre-loaded with:                            ║
+║                                                                              ║
+║     • Hitbox Expander + TriggerBot pages                                     ║
+║     • Config page   — Save/load settings across sessions                     ║
+║     • Server page   — Server tools, rejoin, reset                            ║
+║     • Misc page     — Utilities and info                                     ║
+║     • Settings      — Built into the API (theme, sounds, particles)          ║
+║     • Auto-reload   — Persists across teleports/rejoin/server hop            ║
+║                                                                              ║
+║   Just add your own pages using the examples below!                          ║
+║                                                                              ║
+║   CONTROLS:                                                                  ║
+║     PC:     LEFT ALT = open/close, Arrow keys = navigate                     ║
+║             F/Enter = select, X = back, V = mouse mode                       ║
+║     Mobile: Skull button = open, swipe = navigate, tap = select              ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 --]]
 
---================================--
---          SERVICES              --
---================================--
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
-local player = Players.LocalPlayer
+--══════════════════════════════════════════════════════════════
+--  AUTO-RELOAD ON TELEPORT (like Infinite Yield)
+--══════════════════════════════════════════════════════════════
+--  Set this to YOUR hub's raw URL so it auto-loads on
+--  rejoin, server hop, and teleport within the same game.
+--  Leave as "" to disable auto-reload.
 
---================================--
---         LOAD LIBRARY           --
---================================--
-print("[SPOOKALICIOUS] Loading Spookalicious V4 library...")
+local HUB_URL = ""  -- ← paste your hub's raw GitHub URL here
+
+if HUB_URL ~= "" then
+    local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
+    pcall(function()
+        if syn and syn.queue_on_teleport then
+            syn.queue_on_teleport(queueCode)
+        elseif queue_on_teleport then
+            queue_on_teleport(queueCode)
+        elseif fluxus and fluxus.queue_on_teleport then
+            fluxus.queue_on_teleport(queueCode)
+        end
+    end)
+end
+
+
+--══════════════════════════════════════════════════════════════
+--  STEP 1: LOAD THE LIBRARY
+--══════════════════════════════════════════════════════════════
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/SpookaliciousV4.lua"))()
 
-print("[SPOOKALICIOUS] Loading addons...")
 
-local ConfigSystem = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/ConfigSystem_Addon.lua"))()
-local NewElements = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/SPOOKALICIOUS%20V4%20API/NewElements_Addon.lua"))()
+--══════════════════════════════════════════════════════════════
+--  STEP 2: CREATE THE WINDOW
+--══════════════════════════════════════════════════════════════
 
-print("[SPOOKALICIOUS] Addons loaded!")
+local Window = Library:CreateWindow("MY HUB", "V1.0")  -- ← change title and version
 
---================================--
---   EXTEND & CREATE WINDOW       --
---================================--
-NewElements.Extend(Library)
+--  Window methods:
+--    Window:CreatePage(name)    → Page object
+--    Window:Toggle/Show/Hide()  → menu visibility
+--    Window:Notify(msg)         → toast notification
+--    Window:Destroy()           → destroy GUI
+--    Window:SaveConfig(name)    → save settings to file
+--    Window:LoadConfig(name)    → load settings from file
+--    Window:GetProfiles()       → list saved profiles
+--    Window:ExportConfig(name)  → copy config to clipboard
+--    Window:DeleteConfig(name)  → delete a profile
 
-local Window = Library:CreateWindow("SPOOKALICIOUS", "V4")
 
-ConfigSystem:Attach(Window)
-Window:SetAutoSave(false)
+--══════════════════════════════════════════════════════════════
+--  STEP 3: SERVICES
+--══════════════════════════════════════════════════════════════
 
-Window:Notify("Hitbox Expander + TriggerBot Loaded!")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local UIS = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local player = Players.LocalPlayer
+local _hasFS = (typeof(writefile) == "function" and typeof(readfile) == "function")
+
+local function sendNotification(title, text)
+    for i = 1, 10 do
+        local ok = pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = title, Text = text, Duration = 5,
+            })
+        end)
+        if ok then break end
+        task.wait(0.5)
+    end
+end
+
+-- Functional toggles: reset to safe defaults on config load
+local functionalToggles = {}
+
+local function registerFunctionalToggle(toggle, defaultState)
+    table.insert(functionalToggles, { ref = toggle, default = defaultState or false })
+end
+
+local function resetFunctionalToggles()
+    for _, item in ipairs(functionalToggles) do
+        item.ref:Set(item.default)
+    end
+end
+
+
+--[[
+══════════════════════════════════════════════════════════════════
+   ELEMENT REFERENCE
+══════════════════════════════════════════════════════════════════
+
+   Section:CreateToggle(label, {Toggled=false}, function(v) end)     → {Set, Get}
+   Section:CreateSlider(label, {Min,Max,DefaultValue,Step}, fn(v))   → {Set, Get}
+   Section:CreateButton(label, function() end)
+   Section:CreateTextbox(label, placeholder, function(text) end)     → {Set, Get}
+   Section:CreateDropdown(label, {List,Default}, function(v) end)    → {Set,Get,Clear,Add,Refresh}
+   Section:CreateKeybind(label, {Default=nil}, function(key) end)    → {Set, Get}
+   Section:CreateLabel(text)
+   Section:CreateDivider()
+
+   CONFIG: Saves toggles, sliders, dropdowns, textboxes, keybinds + UI settings.
+   Toggle:Set() fires the callback, so config load activates features properly.
+
+══════════════════════════════════════════════════════════════════
+--]]
+
+
+--══════════════════════════════════════════════════════════════
+--  YOUR PAGES GO HERE  ↓↓↓
+--══════════════════════════════════════════════════════════════
+--  Pages appear in the order you create them.
+--  Settings page is added automatically by the API.
+--
+--    local MyPage = Window:CreatePage("My Page")
+--    local MySection = MyPage:CreateSection("Section Name")
+--    MySection:CreateToggle("My Toggle", { Toggled = false }, function(v) ... end)
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │  ADD YOUR PAGES BELOW THIS LINE                            │
+-- └────────────────────────────────────────────────────────────┘
+
+
+
+
+-- ┌────────────────────────────────────────────────────────────┐
+-- │  ADD YOUR PAGES ABOVE THIS LINE                            │
+-- └────────────────────────────────────────────────────────────┘
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║    ⚠️  EXAMPLES PAGE — DELETE THIS ENTIRE SECTION WHEN YOU'RE DONE  ⚠️   ║
+--║    This is just a reference showing every element type.                 ║
+--║    It's safe to delete everything between the ════ lines below.        ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+-- ═══════════════ START DELETE ═══════════════
+
+local ExamplePage = Window:CreatePage("Examples")
+
+local ToggleSection = ExamplePage:CreateSection("Toggles")
+ToggleSection:CreateLabel("Toggles are on/off switches")
+ToggleSection:CreateDivider()
+local myToggle = ToggleSection:CreateToggle("Example Toggle", { Toggled = false }, function(value)
+    Window:Notify("Toggle: " .. tostring(value))
+end)
+
+local SliderSection = ExamplePage:CreateSection("Sliders")
+SliderSection:CreateLabel("Sliders pick a number in a range")
+SliderSection:CreateDivider()
+local mySlider = SliderSection:CreateSlider("Speed Value", {
+    Min = 0, Max = 100, DefaultValue = 50, Step = 5,
+}, function(value)
+    Window:Notify("Speed: " .. value)
+end)
+
+local ButtonSection = ExamplePage:CreateSection("Buttons")
+ButtonSection:CreateButton("Click Me", function() Window:Notify("Clicked!") end)
+
+local DropdownSection = ExamplePage:CreateSection("Dropdowns")
+local myDropdown = DropdownSection:CreateDropdown("Pick a Fruit", {
+    List = { "Apple", "Banana", "Cherry", "Grape" }, Default = "Apple",
+}, function(value)
+    Window:Notify("Picked: " .. value)
+end)
+
+local TextboxSection = ExamplePage:CreateSection("Textboxes")
+local myTextbox = TextboxSection:CreateTextbox("Username", "Enter name...", function(text)
+    Window:Notify("Typed: " .. text)
+end)
+
+local KeybindSection = ExamplePage:CreateSection("Keybinds")
+KeybindSection:CreateLabel("Fires when menu is CLOSED")
+local myKeybind = KeybindSection:CreateKeybind("Action Key", { Default = nil }, function(key)
+    print("Keybind pressed:", key.Name)
+end)
+
+-- ═══════════════ END DELETE ═══════════════
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                                                                        ║
+--║            HITBOX EXPANDER + TRIGGERBOT (integrated)                    ║
+--║                                                                        ║
+--╚══════════════════════════════════════════════════════════════════════════╝
 
 --================================--
 --       SHARED HELPERS           --
 --================================--
 
--- Thorough alive check: covers humanoid state, health, ragdoll tags, and common death indicators
 local function isAlive(character)
     if not character or not character.Parent then return false end
-
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if not humanoid then return false end
     if humanoid.Health <= 0 then return false end
-
     local hState = humanoid:GetState()
     if hState == Enum.HumanoidStateType.Dead then return false end
     if hState == Enum.HumanoidStateType.Physics then return false end
-
-    -- Common ragdoll/death tags used by many games
     if character:FindFirstChild("Ragdoll") then return false end
     if character:FindFirstChild("Ragdolled") then return false end
     if character:FindFirstChild("Dead") then return false end
     if character:FindFirstChild("IsDead") then return false end
-
-    -- Check BoolValue/StringValue death markers
     local deadVal = character:FindFirstChild("isDead") or character:FindFirstChild("IsDead")
     if deadVal and typeof(deadVal.Value) == "boolean" and deadVal.Value == true then return false end
-
-    -- No HumanoidRootPart usually means dead/despawning
-    if not character:FindFirstChild("HumanoidRootPart") then
-        -- Some custom models don't use HRP, so only fail if they DO have a humanoid (standard char)
-        if Players:GetPlayerFromCharacter(character) then
-            return false
-        end
-    end
-
-    return true
-end
-
--- Lightweight alive check for the triggerbot hot path (skips expensive lookups)
-local function isAliveFast(character)
-    if not character or not character.Parent then return false end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return false end
-    if humanoid.Health <= 0 then return false end
-
-    local hState = humanoid:GetState()
-    if hState == Enum.HumanoidStateType.Dead or hState == Enum.HumanoidStateType.Physics then
+    if not character:FindFirstChild("HumanoidRootPart") and Players:GetPlayerFromCharacter(character) then
         return false
     end
-
     return true
 end
 
--- Check for dead custom models that may not have a standard humanoid state
+local function isAliveFast(character)
+    if not character or not character.Parent then return false end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return false end
+    local hState = humanoid:GetState()
+    return hState ~= Enum.HumanoidStateType.Dead and hState ~= Enum.HumanoidStateType.Physics
+end
+
 local function isDeadCustomModel(model)
     if not model or not model.Parent then return true end
-
-    -- Check for humanoid first
     local humanoid = model:FindFirstChildOfClass("Humanoid")
     if humanoid then
         if humanoid.Health <= 0 then return true end
         local hState = humanoid:GetState()
-        if hState == Enum.HumanoidStateType.Dead or hState == Enum.HumanoidStateType.Physics then
-            return true
-        end
+        if hState == Enum.HumanoidStateType.Dead or hState == Enum.HumanoidStateType.Physics then return true end
     end
-
-    -- Common death/ragdoll markers
     if model:FindFirstChild("Ragdoll") or model:FindFirstChild("Ragdolled") then return true end
     if model:FindFirstChild("Dead") or model:FindFirstChild("IsDead") then return true end
-
     local deadVal = model:FindFirstChild("isDead") or model:FindFirstChild("IsDead")
     if deadVal and typeof(deadVal.Value) == "boolean" and deadVal.Value == true then return true end
-
     return false
 end
 
@@ -128,7 +268,6 @@ local function isTeammate(model)
     return false
 end
 
--- Team check using a player object directly (for custom models)
 local function isTeammatePlayer(plr)
     if not plr then return false end
     if player.Team and plr.Team and player.Team == plr.Team then return true end
@@ -137,9 +276,11 @@ local function isTeammatePlayer(plr)
     return false
 end
 
+
 --================================--
 --   HITBOX EXPANDER VARIABLES    --
 --================================--
+
 local HitboxSettings = {
     Enabled = false,
     HitboxSize = 8,
@@ -154,7 +295,7 @@ local HitboxSettings = {
     ApplyMaterial = true,
     ApplyColor = true,
     ApplyCanCollide = true,
-    ApplyMassless = true
+    ApplyMassless = true,
 }
 
 local editedCharacters = {}
@@ -163,13 +304,13 @@ local originalHitboxData = {}
 --================================--
 --   HITBOX EXPANDER LOGIC        --
 --================================--
+
 local overlapParams = OverlapParams.new()
 overlapParams.FilterType = Enum.RaycastFilterType.Blacklist
 
 local function isValidTarget(character)
     if not isAlive(character) then return false end
     if isTeammate(character) then return false end
-
     local playerFromChar = Players:GetPlayerFromCharacter(character)
     if HitboxSettings.TargetMode == "Players" then
         return playerFromChar and playerFromChar ~= player
@@ -178,6 +319,38 @@ local function isValidTarget(character)
     elseif HitboxSettings.TargetMode == "Both" then
         return not playerFromChar or playerFromChar ~= player
     end
+    return false
+end
+
+-- Safe property setter: pcall prevents errors on incompatible BasePart types
+local function safeSet(obj, prop, val)
+    pcall(function() obj[prop] = val end)
+end
+
+-- Save all original properties before modifying (reads safely)
+local function saveOriginal(hitbox)
+    if originalHitboxData[hitbox] then return end
+    local data = {}
+    pcall(function() data.Size = hitbox.Size end)
+    pcall(function() data.Transparency = hitbox.Transparency end)
+    pcall(function() data.Material = hitbox.Material end)
+    pcall(function() data.BrickColor = hitbox.BrickColor end)
+    pcall(function() data.Color = hitbox.Color end)
+    pcall(function() data.CanCollide = hitbox.CanCollide end)
+    pcall(function() data.Massless = hitbox.Massless end)
+    pcall(function() data.CanQuery = hitbox.CanQuery end)
+    originalHitboxData[hitbox] = data
+end
+
+-- Restore all original properties
+local function restoreOriginal(hitbox)
+    local data = originalHitboxData[hitbox]
+    if not data then return end
+    if not hitbox or not hitbox.Parent then originalHitboxData[hitbox] = nil; return end
+    for prop, val in pairs(data) do
+        safeSet(hitbox, prop, val)
+    end
+    originalHitboxData[hitbox] = nil
 end
 
 local function applyHitbox(character)
@@ -185,176 +358,151 @@ local function applyHitbox(character)
     if not isValidTarget(character) then return end
 
     local hitbox = character:FindFirstChild(HitboxSettings.HitboxPartName)
-    if not hitbox then return end
+    if not hitbox or not hitbox:IsA("BasePart") then return end
 
-    if not originalHitboxData[hitbox] then
-        originalHitboxData[hitbox] = {
-            Size = hitbox.Size,
-            Transparency = hitbox.Transparency,
-            Material = hitbox.Material,
-            BrickColor = hitbox.BrickColor,
-            CanCollide = hitbox.CanCollide,
-            Massless = hitbox.Massless
-        }
-    end
-
+    saveOriginal(hitbox)
     editedCharacters[character] = true
 
+    -- Remove decals/textures/surface appearances that cover the visual
     for _, child in ipairs(hitbox:GetChildren()) do
-        if child:IsA("Decal") or child:IsA("Texture") then
-            child:Destroy()
+        if child:IsA("Decal") or child:IsA("Texture") or child:IsA("SurfaceAppearance") then
+            pcall(function() child:Destroy() end)
         end
     end
 
-    hitbox.Size = Vector3.new(HitboxSettings.HitboxSize, HitboxSettings.HitboxSize, HitboxSettings.HitboxSize)
+    -- Size (always applied — the whole point of hitbox expander)
+    safeSet(hitbox, "Size", Vector3.new(HitboxSettings.HitboxSize, HitboxSettings.HitboxSize, HitboxSettings.HitboxSize))
 
+    -- Optional properties
     if HitboxSettings.ApplyTransparency then
-        hitbox.Transparency = HitboxSettings.Transparency
+        safeSet(hitbox, "Transparency", HitboxSettings.Transparency)
     end
     if HitboxSettings.ApplyMaterial then
-        hitbox.Material = HitboxSettings.Material
+        safeSet(hitbox, "Material", HitboxSettings.Material)
     end
     if HitboxSettings.ApplyColor then
-        hitbox.BrickColor = HitboxSettings.Color
+        safeSet(hitbox, "BrickColor", HitboxSettings.Color)
+        safeSet(hitbox, "Color", HitboxSettings.Color.Color) -- Color3 for MeshParts
     end
     if HitboxSettings.ApplyCanCollide then
-        hitbox.CanCollide = false
+        safeSet(hitbox, "CanCollide", false)
     end
     if HitboxSettings.ApplyMassless then
-        hitbox.Massless = true
+        safeSet(hitbox, "Massless", true)
     end
+    -- Keep queryable so raycasts/mouse still register hits
+    safeSet(hitbox, "CanQuery", true)
 end
 
 local function restoreAllHitboxes()
-    for hitbox, originalData in pairs(originalHitboxData) do
-        if hitbox and hitbox.Parent then
-            hitbox.Size = originalData.Size
-            hitbox.Transparency = originalData.Transparency
-            hitbox.Material = originalData.Material
-            hitbox.BrickColor = originalData.BrickColor
-            hitbox.CanCollide = originalData.CanCollide
-            hitbox.Massless = originalData.Massless
-        end
+    for character, _ in pairs(editedCharacters) do
+        local hitbox = character and character:FindFirstChild(HitboxSettings.HitboxPartName)
+        if hitbox then restoreOriginal(hitbox) end
     end
     editedCharacters = {}
-    originalHitboxData = {}
+    for hitbox in pairs(originalHitboxData) do
+        if not hitbox or not hitbox.Parent then originalHitboxData[hitbox] = nil end
+    end
 end
 
+-- Main hitbox loop
 task.spawn(function()
     while task.wait(0.1) do
         if not HitboxSettings.Enabled then continue end
 
+        -- Cleanup dead/removed
         for character, _ in pairs(editedCharacters) do
             if not character or not character.Parent or not isAlive(character) then
                 local hitbox = character and character:FindFirstChild(HitboxSettings.HitboxPartName)
-                if hitbox and originalHitboxData[hitbox] then
-                    local orig = originalHitboxData[hitbox]
-                    if hitbox.Parent then
-                        hitbox.Size = orig.Size
-                        hitbox.Transparency = orig.Transparency
-                        hitbox.Material = orig.Material
-                        hitbox.BrickColor = orig.BrickColor
-                        hitbox.CanCollide = orig.CanCollide
-                        hitbox.Massless = orig.Massless
-                    end
-                    originalHitboxData[hitbox] = nil
-                end
+                if hitbox then restoreOriginal(hitbox) end
                 editedCharacters[character] = nil
             end
         end
 
-        local character = player.Character
-        local hrp = character and character:FindFirstChild("HumanoidRootPart")
-
+        -- Find new targets
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if hrp then
-            overlapParams.FilterDescendantsInstances = { character }
+            overlapParams.FilterDescendantsInstances = { char }
             local parts = Workspace:GetPartBoundsInRadius(hrp.Position, HitboxSettings.Radius, overlapParams)
-
             local processed = 0
             for i = 1, #parts do
                 local model = parts[i]:FindFirstAncestorOfClass("Model")
                 if model and model:FindFirstChildOfClass("Humanoid") then
                     applyHitbox(model)
                 end
-
                 processed += 1
-                if processed % HitboxSettings.PartsPerStep == 0 then
-                    task.wait()
-                end
+                if processed % HitboxSettings.PartsPerStep == 0 then task.wait() end
             end
         end
     end
 end)
 
+
 --================================--
 --      TRIGGERBOT VARIABLES      --
 --================================--
-_G.config = _G.config or {
+
+local triggerBotEnabled = false
+local triggerConfig = {
     HoldClick = true,
     TeamExclusionMode = "folder",
-    MaxDistance = nil
+    MaxDistance = nil,
 }
 
-_G.TriggerBotState = _G.TriggerBotState or { clicking = false }
-local state = _G.TriggerBotState
-
 local mouse = player:GetMouse()
-
 local rightDown = false
-UserInputService.InputBegan:Connect(function(i)
+local lastX, lastY = 0, 0
+local clickDelay = 0
+local lastClickTime = 0
+local tbClicking = false
+
+UIS.InputBegan:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton2 then rightDown = true end
 end)
-UserInputService.InputEnded:Connect(function(i)
+UIS.InputEnded:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton2 then rightDown = false end
 end)
 
-local lastX, lastY = 0, 0
 RunService.RenderStepped:Connect(function()
-    local v = UserInputService:GetMouseLocation()
+    local v = UIS:GetMouseLocation()
     lastX, lastY = v.X, v.Y
 end)
 
-local clickDelay = 0
-local lastClickTime = 0
-
 local function setClick(down)
-    if state.clicking == down then return end
-    state.clicking = down
-    VirtualInputManager:SendMouseButtonEvent(lastX, lastY, 0, down, nil, 0)
+    if tbClicking == down then return end
+    tbClicking = down
+    pcall(function() VirtualInputManager:SendMouseButtonEvent(lastX, lastY, 0, down, nil, 0) end)
 end
 
 local function spamClick()
     local now = tick()
     if now - lastClickTime < clickDelay then return end
     lastClickTime = now
-    VirtualInputManager:SendMouseButtonEvent(lastX, lastY, 0, true, nil, 0)
-    VirtualInputManager:SendMouseButtonEvent(lastX, lastY, 0, false, nil, 0)
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(lastX, lastY, 0, true, nil, 0)
+        VirtualInputManager:SendMouseButtonEvent(lastX, lastY, 0, false, nil, 0)
+    end)
 end
 
 local function inRange(model)
-    local max = _G.config.MaxDistance
+    local max = triggerConfig.MaxDistance
     if not max then return true end
     local char = player.Character
     if not char then return false end
     local root1 = char:FindFirstChild("HumanoidRootPart")
     if not root1 then return false end
-
     local root2 = model:FindFirstChild("HumanoidRootPart")
     if not root2 then
         for _, part in ipairs(model:GetChildren()) do
-            if part:IsA("BasePart") then
-                root2 = part
-                break
-            end
+            if part:IsA("BasePart") then root2 = part; break end
         end
     end
     if not root2 then return false end
     return (root1.Position - root2.Position).Magnitude <= max
 end
 
-local function isMyCharacter(model)
-    return model == player.Character
-end
+local function isMyCharacter(model) return model == player.Character end
 
 local function isInSameParentContainer(model)
     local char = player.Character
@@ -367,7 +515,6 @@ local modelCache = setmetatable({}, { __mode = "k" })
 local function getCharacterModel(part)
     if not part then return end
     if modelCache[part] then return modelCache[part] end
-
     local current = part
     while current and current ~= Workspace do
         if current:IsA("Model") and current:FindFirstChildOfClass("Humanoid") then
@@ -378,19 +525,11 @@ local function getCharacterModel(part)
     end
 end
 
---============================================================--
---  PLAYER MODEL RESOLVER (EVENT-DRIVEN, NO LAG)              --
---  Instead of scanning all of workspace every 0.5s, we:      --
---  1. Build a name lookup from the player list (lightweight)  --
---  2. Listen to ChildAdded/Removed on workspace (one-time)   --
---  3. Listen to PlayerAdded/Removing to update the name map   --
---  4. Only register models when they appear, not by looping   --
---============================================================--
+--================================--
+--   PLAYER MODEL RESOLVER        --
+--================================--
 
--- modelToPlayer: Model -> Player (weak keys for auto-cleanup)
 local modelToPlayer = setmetatable({}, { __mode = "k" })
-
--- playerNameSet: lowercase name -> Player (rebuilt only when player list changes)
 local playerNameSet = {}
 local nameSetDirty = true
 
@@ -402,155 +541,94 @@ local function rebuildNameSet()
             if plr.DisplayName and #plr.DisplayName > 0 and plr.DisplayName ~= plr.Name then
                 playerNameSet[plr.DisplayName:lower()] = plr
             end
-            -- Always map standard character
-            if plr.Character then
-                modelToPlayer[plr.Character] = plr
-            end
+            if plr.Character then modelToPlayer[plr.Character] = plr end
         end
     end
     nameSetDirty = false
 end
 
--- Try to register a single model if its name matches a player
 local function tryRegisterModel(instance)
     if not instance:IsA("Model") then return end
     if nameSetDirty then rebuildNameSet() end
-
     local ownerPlayer = playerNameSet[instance.Name:lower()]
-    if ownerPlayer then
-        modelToPlayer[instance] = ownerPlayer
-    end
+    if ownerPlayer then modelToPlayer[instance] = ownerPlayer end
 end
 
--- Unregister a model when removed
-local function tryUnregisterModel(instance)
-    if instance:IsA("Model") then
-        modelToPlayer[instance] = nil
-    end
-end
-
--- ═══ EVENT HOOKS (fire only when things change, zero polling cost) ═══
-
--- When a new child is added to workspace, check if it's a player model
 Workspace.ChildAdded:Connect(tryRegisterModel)
-Workspace.ChildRemoved:Connect(tryUnregisterModel)
+Workspace.ChildRemoved:Connect(function(inst) if inst:IsA("Model") then modelToPlayer[inst] = nil end end)
+Workspace.DescendantAdded:Connect(function(d) if d:IsA("Model") then tryRegisterModel(d) end end)
+Workspace.DescendantRemoving:Connect(function(d) if d:IsA("Model") then modelToPlayer[d] = nil end end)
 
--- Also watch DescendantAdded for models inside folders (1 event, not a loop)
-Workspace.DescendantAdded:Connect(function(desc)
-    if desc:IsA("Model") then
-        tryRegisterModel(desc)
-    end
-end)
-
-Workspace.DescendantRemoving:Connect(function(desc)
-    if desc:IsA("Model") then
-        modelToPlayer[desc] = nil
-    end
-end)
-
--- When players join/leave, mark name set dirty and re-register characters
 Players.PlayerAdded:Connect(function(plr)
     nameSetDirty = true
-    plr.CharacterAdded:Connect(function(char)
-        modelToPlayer[char] = plr
-    end)
+    plr.CharacterAdded:Connect(function(char) modelToPlayer[char] = plr end)
 end)
-
 Players.PlayerRemoving:Connect(function(plr)
     nameSetDirty = true
-    -- Clean up any models belonging to this player
     for model, owner in pairs(modelToPlayer) do
-        if owner == plr then
-            modelToPlayer[model] = nil
-        end
+        if owner == plr then modelToPlayer[model] = nil end
     end
 end)
-
--- Hook existing players' CharacterAdded
 for _, plr in ipairs(Players:GetPlayers()) do
     if plr ~= player then
-        plr.CharacterAdded:Connect(function(char)
-            modelToPlayer[char] = plr
-        end)
+        plr.CharacterAdded:Connect(function(char) modelToPlayer[char] = plr end)
     end
 end
 
--- Initial registration: one-time scan of existing workspace children (not recursive heavy scan)
 task.defer(function()
     rebuildNameSet()
-    -- Quick pass over workspace direct children + one level deep in folders
     for _, child in ipairs(Workspace:GetChildren()) do
         tryRegisterModel(child)
         if child:IsA("Folder") then
-            for _, sub in ipairs(child:GetChildren()) do
-                tryRegisterModel(sub)
-            end
+            for _, sub in ipairs(child:GetChildren()) do tryRegisterModel(sub) end
         end
     end
 end)
 
--- Walk up from a part and check if any ancestor model is owned by another player
 local function getOwningPlayerModel(part)
     if not part then return nil, nil end
-
     local current = part
     while current and current ~= Workspace do
         if current:IsA("Model") then
             local ownerPlayer = modelToPlayer[current]
-            if ownerPlayer then
-                return current, ownerPlayer
-            end
+            if ownerPlayer then return current, ownerPlayer end
         end
         current = current.Parent
     end
     return nil, nil
 end
 
---============================================================--
---  COMBINED TARGET VALIDATION                                --
---============================================================--
+--================================--
+--   TRIGGERBOT TARGET VALIDATION  --
+--================================--
 
 local function getValidTarget(part)
     if not part then return false end
 
-    -- ═══ CHECK 1: Classic humanoid-based detection ═══
     local model = getCharacterModel(part)
     if model then
         if isMyCharacter(model) then return false end
         if not inRange(model) then return false end
         if not isAliveFast(model) then return false end
-
-        -- Extra dead checks
         if model:FindFirstChild("Ragdoll") or model:FindFirstChild("Ragdolled") then return false end
         if model:FindFirstChild("Dead") or model:FindFirstChild("IsDead") then return false end
         if not model:FindFirstChild("HumanoidRootPart") and Players:GetPlayerFromCharacter(model) then return false end
-
-        local mode = _G.config.TeamExclusionMode
+        local mode = triggerConfig.TeamExclusionMode
         if mode == "team" and isTeammate(model) then return false end
         if mode == "folder" and isInSameParentContainer(model) then return false end
         if mode == "players" and Players:GetPlayerFromCharacter(model) then return false end
-
-        local humanoid = model:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            return true
-        end
+        if model:FindFirstChildOfClass("Humanoid") then return true end
     end
 
-    -- ═══ CHECK 2: Player model resolver (custom character models) ═══
     local playerModel, ownerPlayer = getOwningPlayerModel(part)
     if playerModel and ownerPlayer then
         if ownerPlayer == player then return false end
         if isMyCharacter(playerModel) then return false end
         if not inRange(playerModel) then return false end
-
-        -- Dead check for custom models
         if isDeadCustomModel(playerModel) then return false end
-
-        -- Team exclusion using the resolved player object
-        local mode = _G.config.TeamExclusionMode
+        local mode = triggerConfig.TeamExclusionMode
         if mode == "team" and isTeammatePlayer(ownerPlayer) then return false end
         if mode == "folder" and isInSameParentContainer(playerModel) then return false end
-
         return true
     end
 
@@ -558,202 +636,353 @@ local function getValidTarget(part)
 end
 
 -- Main TriggerBot loop
-local triggerBotEnabled = false
 RunService.RenderStepped:Connect(function()
     if not triggerBotEnabled then
-        if state.clicking then setClick(false) end
+        if tbClicking then setClick(false) end
         return
     end
-    if _G.config.HoldClick and not rightDown then
-        if state.clicking then setClick(false) end
+    if triggerConfig.HoldClick and not rightDown then
+        if tbClicking then setClick(false) end
         return
     end
     if getValidTarget(mouse.Target) then
         spamClick()
     else
-        if state.clicking then setClick(false) end
+        if tbClicking then setClick(false) end
     end
 end)
 
 
 --╔══════════════════════════════════════════════════════════════════════════╗
---║                     HITBOX EXPANDER GUI                                  ║
+--║                     HITBOX EXPANDER PAGE                               ║
 --╚══════════════════════════════════════════════════════════════════════════╝
 
 local HitboxPage = Window:CreatePage("Hitbox Expander")
 
-local MainSection = HitboxPage:CreateSection("Main Controls")
+local HBMainSection = HitboxPage:CreateSection("Main Controls")
 
-MainSection:CreateToggle("Enable Hitbox Expander", {Toggled = false}, function(value)
+local hitboxToggle = HBMainSection:CreateToggle("Enable Hitbox Expander", { Toggled = false }, function(value)
     HitboxSettings.Enabled = value
-    if not value then
-        restoreAllHitboxes()
-    end
-    Window:Notify("Hitbox Expander: " .. (value and "ACTIVE" or "INACTIVE"))
+    if not value then restoreAllHitboxes() end
+    Window:Notify("Hitbox Expander: " .. (value and "ON" or "OFF"))
 end)
+registerFunctionalToggle(hitboxToggle, false)
 
-local ConfigSection = HitboxPage:CreateSection("Hitbox Configuration")
+local HBConfigSection = HitboxPage:CreateSection("Hitbox Configuration")
 
-ConfigSection:CreateSlider("Hitbox Size", {Min = 1, Max = 50, DefaultValue = 8, Step = 1}, function(value)
+HBConfigSection:CreateSlider("Hitbox Size", { Min = 1, Max = 50, DefaultValue = 8, Step = 1 }, function(value)
     HitboxSettings.HitboxSize = value
     restoreAllHitboxes()
 end)
 
-ConfigSection:CreateSlider("Detection Radius", {Min = 50, Max = 500, DefaultValue = 150, Step = 10}, function(value)
+HBConfigSection:CreateSlider("Detection Radius", { Min = 50, Max = 500, DefaultValue = 150, Step = 10 }, function(value)
     HitboxSettings.Radius = value
 end)
 
-ConfigSection:CreateSlider("Transparency", {Min = 0, Max = 100, DefaultValue = 99, Step = 1}, function(value)
+HBConfigSection:CreateSlider("Transparency", { Min = 0, Max = 100, DefaultValue = 99, Step = 1 }, function(value)
     HitboxSettings.Transparency = value / 100
     restoreAllHitboxes()
 end)
 
-local TargetSection = HitboxPage:CreateSection("Target Settings")
+local HBTargetSection = HitboxPage:CreateSection("Target Settings")
 
-TargetSection:CreateButton("Target: NPCs Only", function()
-    HitboxSettings.TargetMode = "NPCs"
+HBTargetSection:CreateDropdown("Target Mode", {
+    List = { "NPCs", "Players", "Both" },
+    Default = "NPCs",
+}, function(value)
+    HitboxSettings.TargetMode = value
     restoreAllHitboxes()
-    Window:Notify("Target Mode: NPCs")
+    Window:Notify("Target: " .. value)
 end)
 
-TargetSection:CreateButton("Target: Players Only", function()
-    HitboxSettings.TargetMode = "Players"
-    restoreAllHitboxes()
-    Window:Notify("Target Mode: Players")
-end)
-
-TargetSection:CreateButton("Target: Both NPCs & Players", function()
-    HitboxSettings.TargetMode = "Both"
-    restoreAllHitboxes()
-    Window:Notify("Target Mode: Both")
-end)
-
-TargetSection:CreateTextbox("Hitbox Part Name", "Head", function(text)
+HBTargetSection:CreateTextbox("Hitbox Part Name", "Head", function(text)
     if text and #text > 0 then
         HitboxSettings.HitboxPartName = text
         restoreAllHitboxes()
-        Window:Notify("Part Name: " .. text)
+        Window:Notify("Part: " .. text)
     end
 end)
 
-local PropertySection = HitboxPage:CreateSection("Property Toggles")
+local HBPropSection = HitboxPage:CreateSection("Property Toggles")
 
-PropertySection:CreateToggle("Apply Transparency", {Toggled = true}, function(value)
-    HitboxSettings.ApplyTransparency = value
-    restoreAllHitboxes()
-    Window:Notify("Apply Transparency: " .. (value and "ON" or "OFF"))
+HBPropSection:CreateToggle("Apply Transparency", { Toggled = true }, function(v)
+    HitboxSettings.ApplyTransparency = v; restoreAllHitboxes()
 end)
 
-PropertySection:CreateToggle("Apply Material", {Toggled = true}, function(value)
-    HitboxSettings.ApplyMaterial = value
-    restoreAllHitboxes()
-    Window:Notify("Apply Material: " .. (value and "ON" or "OFF"))
+HBPropSection:CreateToggle("Apply Material", { Toggled = true }, function(v)
+    HitboxSettings.ApplyMaterial = v; restoreAllHitboxes()
 end)
 
-PropertySection:CreateToggle("Apply Color", {Toggled = true}, function(value)
-    HitboxSettings.ApplyColor = value
-    restoreAllHitboxes()
-    Window:Notify("Apply Color: " .. (value and "ON" or "OFF"))
+HBPropSection:CreateToggle("Apply Color", { Toggled = true }, function(v)
+    HitboxSettings.ApplyColor = v; restoreAllHitboxes()
 end)
 
-PropertySection:CreateToggle("Apply CanCollide = False", {Toggled = true}, function(value)
-    HitboxSettings.ApplyCanCollide = value
-    restoreAllHitboxes()
-    Window:Notify("Apply CanCollide: " .. (value and "ON" or "OFF"))
+HBPropSection:CreateToggle("Apply CanCollide = False", { Toggled = true }, function(v)
+    HitboxSettings.ApplyCanCollide = v; restoreAllHitboxes()
 end)
 
-PropertySection:CreateToggle("Apply Massless = True", {Toggled = true}, function(value)
-    HitboxSettings.ApplyMassless = value
-    restoreAllHitboxes()
-    Window:Notify("Apply Massless: " .. (value and "ON" or "OFF"))
+HBPropSection:CreateToggle("Apply Massless = True", { Toggled = true }, function(v)
+    HitboxSettings.ApplyMassless = v; restoreAllHitboxes()
 end)
 
-local AdvancedSection = HitboxPage:CreateSection("Advanced Settings")
+local HBAdvSection = HitboxPage:CreateSection("Advanced")
 
-AdvancedSection:CreateSlider("Parts Per Step", {Min = 10, Max = 100, DefaultValue = 25, Step = 5}, function(value)
+HBAdvSection:CreateSlider("Parts Per Step", { Min = 10, Max = 100, DefaultValue = 25, Step = 5 }, function(value)
     HitboxSettings.PartsPerStep = value
 end)
 
-AdvancedSection:CreateButton("Reset All Hitboxes", function()
+HBAdvSection:CreateButton("Reset All Hitboxes", function()
     restoreAllHitboxes()
     Window:Notify("All hitboxes restored!")
 end)
 
 
 --╔══════════════════════════════════════════════════════════════════════════╗
---║                        TRIGGERBOT GUI                                    ║
+--║                        TRIGGERBOT PAGE                                 ║
 --╚══════════════════════════════════════════════════════════════════════════╝
 
-local TriggerBotPage = Window:CreatePage("TriggerBot")
+local TriggerPage = Window:CreatePage("TriggerBot")
 
-local TriggerMainSection = TriggerBotPage:CreateSection("Main Controls")
+local TBMainSection = TriggerPage:CreateSection("Main Controls")
 
-TriggerMainSection:CreateToggle("Enable TriggerBot", {Toggled = false}, function(value)
+local triggerToggle = TBMainSection:CreateToggle("Enable TriggerBot", { Toggled = false }, function(value)
     triggerBotEnabled = value
-    Window:Notify("TriggerBot: " .. (value and "ACTIVE" or "INACTIVE"))
+    Window:Notify("TriggerBot: " .. (value and "ON" or "OFF"))
 end)
+registerFunctionalToggle(triggerToggle, false)
 
-local TriggerConfigSection = TriggerBotPage:CreateSection("Configuration")
+local TBConfigSection = TriggerPage:CreateSection("Configuration")
 
-TriggerConfigSection:CreateToggle("Hold Click Mode", {Toggled = true}, function(value)
-    _G.config.HoldClick = value
+TBConfigSection:CreateToggle("Hold Right-Click Mode", { Toggled = true }, function(value)
+    triggerConfig.HoldClick = value
     Window:Notify("Hold Click: " .. (value and "ON" or "OFF"))
 end)
 
-TriggerConfigSection:CreateSlider("Click Speed (Lower = Faster)", {Min = 0, Max = 100, DefaultValue = 0, Step = 1}, function(value)
+TBConfigSection:CreateSlider("Click Delay (ms)", { Min = 0, Max = 100, DefaultValue = 0, Step = 1 }, function(value)
     clickDelay = value / 1000
+end)
+
+TBConfigSection:CreateSlider("Max Distance", { Min = 0, Max = 500, DefaultValue = 0, Step = 10 }, function(value)
     if value == 0 then
-        Window:Notify("Click Speed: MAXIMUM")
+        triggerConfig.MaxDistance = nil
+        Window:Notify("Distance: Unlimited")
     else
-        Window:Notify("Click Delay: " .. value .. "ms")
+        triggerConfig.MaxDistance = value
+        Window:Notify("Distance: " .. value .. " studs")
     end
 end)
 
-TriggerConfigSection:CreateSlider("Max Distance", {Min = 0, Max = 500, DefaultValue = 0, Step = 10}, function(value)
-    if value == 0 then
-        _G.config.MaxDistance = nil
-        Window:Notify("Max Distance: Unlimited")
-    else
-        _G.config.MaxDistance = value
-        Window:Notify("Max Distance: " .. value .. " studs")
-    end
-end)
+local TBTeamSection = TriggerPage:CreateSection("Team Exclusion")
 
-local TriggerTeamSection = TriggerBotPage:CreateSection("Team Exclusion")
-
-TriggerTeamSection:CreateButton("Mode: Team Check", function()
-    _G.config.TeamExclusionMode = "team"
-    Window:Notify("Exclusion Mode: Team")
-end)
-
-TriggerTeamSection:CreateButton("Mode: Folder Check", function()
-    _G.config.TeamExclusionMode = "folder"
-    Window:Notify("Exclusion Mode: Folder")
-end)
-
-TriggerTeamSection:CreateButton("Mode: Exclude Players (NPCs Only)", function()
-    _G.config.TeamExclusionMode = "players"
-    Window:Notify("Exclusion Mode: Players (NPCs Only)")
-end)
-
-TriggerTeamSection:CreateButton("Mode: None (Shoot All)", function()
-    _G.config.TeamExclusionMode = "none"
-    Window:Notify("Exclusion Mode: None")
+TBTeamSection:CreateDropdown("Exclusion Mode", {
+    List = { "folder", "team", "players", "none" },
+    Default = "folder",
+}, function(value)
+    triggerConfig.TeamExclusionMode = value
+    Window:Notify("Exclusion: " .. value)
 end)
 
 
 --╔══════════════════════════════════════════════════════════════════════════╗
---║                           DONE                                           ║
+--║                   SERVER PAGE (do not modify)                          ║
 --╚══════════════════════════════════════════════════════════════════════════╝
 
-print("═══════════════════════════════════════════")
-print("  SPOOKALICIOUS V4")
-print("  Hitbox Expander + TriggerBot")
-print("═══════════════════════════════════════════")
-print("✓ Library loaded")
-print("✓ Config system active")
-print("✓ New elements active")
-print("✓ Hitbox Expander ready")
-print("✓ TriggerBot ready")
-print("✓ Player model resolver (event-driven)")
-print("═══════════════════════════════════════════")
+local ServerPage = Window:CreatePage("Server")
+local ServerSection = ServerPage:CreateSection("Server Tools")
+
+ServerSection:CreateTextbox("Chat Message", "Type message...", function(text)
+    if text and #text > 0 then Window:Notify("Message: " .. text) end
+end)
+
+ServerSection:CreateButton("Copy Server ID", function()
+    if setclipboard then
+        setclipboard(game.JobId)
+        Window:Notify("Server ID copied!")
+    else
+        Window:Notify("Clipboard not supported")
+    end
+end)
+
+ServerSection:CreateButton("Rejoin Server", function()
+    Window:Notify("Rejoining...")
+    local scriptUrl = "https://raw.githubusercontent.com/SeanyBoii2/Z/refs/heads/main/WHITELIST%20TRICKS"
+    if syn and syn.queue_on_teleport then
+        syn.queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    elseif queue_on_teleport then
+        queue_on_teleport('loadstring(game:HttpGet("' .. scriptUrl .. '"))()')
+    end
+    task.wait(0.5)
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+    end)
+end)
+
+ServerSection:CreateButton("Reset Character", function()
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.Health = 0
+    end
+    Window:Notify("Character reset!")
+end)
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                   MISC PAGE (do not modify)                            ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local MiscPage = Window:CreatePage("Misc")
+
+local UtilSection = MiscPage:CreateSection("Utilities")
+
+local antiAfkToggle = UtilSection:CreateToggle("Anti-AFK", { Toggled = true }, function(value)
+    Window:Notify("Anti-AFK: " .. (value and "ON" or "OFF"))
+end)
+registerFunctionalToggle(antiAfkToggle, true)
+
+player.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+
+UtilSection:CreateButton("Copy Discord", function()
+    if setclipboard then
+        setclipboard("spookyie")
+        Window:Notify("Discord copied: spookyie")
+    else
+        Window:Notify("Discord: spookyie")
+    end
+end)
+
+UtilSection:CreateTextbox("Webhook URL", "Paste webhook...", function(url)
+    Window:Notify("Webhook saved!")
+end)
+
+UtilSection:CreateDivider()
+
+local InfoSection = MiscPage:CreateSection("Information")
+
+InfoSection:CreateLabel("Script: MY HUB V1.0")              -- ← change script name only
+InfoSection:CreateLabel("Discord: spookyie")
+InfoSection:CreateDivider()
+
+InfoSection:CreateButton("Credits", function()
+    Window:Notify("Made by Spooky // Discord: spookyie")
+end)
+
+InfoSection:CreateButton("Destroy GUI", function()
+    pcall(function() Window:SaveConfig("Default") end)
+    Window:Notify("Goodbye!")
+    task.wait(1)
+    Window:Destroy()
+end)
+
+
+--╔══════════════════════════════════════════════════════════════════════════╗
+--║                  CONFIG PAGE (do not modify)                           ║
+--╚══════════════════════════════════════════════════════════════════════════╝
+
+local ConfigPage = Window:CreatePage("Config")
+local ConfigSection = ConfigPage:CreateSection("Save & Load")
+
+ConfigSection:CreateLabel("Save your settings to persist across sessions")
+ConfigSection:CreateDivider()
+
+local currentProfile = "Default"
+
+ConfigSection:CreateTextbox("Profile Name", "Default", function(text)
+    if text and #text > 0 then currentProfile = text end
+end)
+
+ConfigSection:CreateDivider()
+
+ConfigSection:CreateButton("Save Config", function()
+    local ok = Window:SaveConfig(currentProfile)
+    Window:Notify(ok and ("Saved: " .. currentProfile) or "Save failed!")
+end)
+
+ConfigSection:CreateButton("Load Config", function()
+    local ok = Window:LoadConfig(currentProfile)
+    if ok then
+        task.wait(0.1)
+        resetFunctionalToggles()
+        Window:Notify("Loaded: " .. currentProfile)
+    else
+        Window:Notify("No config found: " .. currentProfile)
+    end
+end)
+
+ConfigSection:CreateButton("Delete Config", function()
+    Window:DeleteConfig(currentProfile)
+    Window:Notify("Deleted: " .. currentProfile)
+end)
+
+ConfigSection:CreateDivider()
+
+ConfigSection:CreateButton("List Profiles", function()
+    local profiles = Window:GetProfiles()
+    Window:Notify(#profiles > 0 and table.concat(profiles, ", ") or "No saved profiles")
+end)
+
+ConfigSection:CreateButton("Export to Clipboard", function()
+    local ok = Window:ExportConfig(currentProfile)
+    Window:Notify(ok and "Copied to clipboard!" or "Export failed")
+end)
+
+ConfigSection:CreateDivider()
+ConfigSection:CreateLabel(_hasFS and "Saves to: SpookyHub_Configs/" or "No file system — session only!")
+
+
+--══════════════════════════════════════════════════════════════
+--  INITIALIZATION
+--══════════════════════════════════════════════════════════════
+
+task.wait(0.5)
+
+local loaded = Window:LoadConfig("Default")
+if loaded then
+    print("[HUB] Config loaded!")
+else
+    print("[HUB] No saved config — saving defaults")
+    Window:SaveConfig("Default")
+end
+
+resetFunctionalToggles()
+
+game:BindToClose(function()
+    pcall(function() Window:SaveConfig("Default") end)
+end)
+
+print("[HUB] Ready!")
+
+
+--[[
+══════════════════════════════════════════════════════════════════
+   QUICK-START CHEATSHEET
+══════════════════════════════════════════════════════════════════
+
+   ADD A NEW PAGE:
+   ────────────────
+   local MyPage = Window:CreatePage("Page Name")
+   local MySection = MyPage:CreateSection("Section Name")
+
+   ADD ELEMENTS:
+   ─────────────
+   MySection:CreateToggle("Name", { Toggled = false }, function(v) end)
+   MySection:CreateSlider("Name", { Min=0, Max=100, DefaultValue=50, Step=1 }, function(v) end)
+   MySection:CreateButton("Name", function() end)
+   MySection:CreateTextbox("Name", "placeholder...", function(text) end)
+   MySection:CreateDropdown("Name", { List={"A","B"}, Default="A" }, function(v) end)
+   MySection:CreateKeybind("Name", { Default=nil }, function(key) end)
+   MySection:CreateLabel("text")
+   MySection:CreateDivider()
+
+   FUNCTIONAL TOGGLE (resets on config load):
+   ──────────────────────────────────────────
+   local toggle = MySection:CreateToggle(...)
+   registerFunctionalToggle(toggle, false)
+
+   AUTO-RELOAD:
+   ────────────
+   Set HUB_URL at line 36 to your hub's raw GitHub URL.
+
+══════════════════════════════════════════════════════════════════
+--]]
