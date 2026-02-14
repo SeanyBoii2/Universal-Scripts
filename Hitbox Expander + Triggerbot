@@ -1,30 +1,16 @@
 --══════════════════════════════════════════════════════════════
---  AUTO-RELOAD ON TELEPORT
+--  AUTO-RELOAD ON TELEPORT (Like Infinite Yield)
 --══════════════════════════════════════════════════════════════
 
 local HUB_URL = "https://raw.githubusercontent.com/SeanyBoii2/Universal-Scripts/refs/heads/main/Hitbox%20Expander%20%2B%20Triggerbot"
 
-if HUB_URL ~= "" then
-    local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
-    
-    local function queueScript()
-        local success = false
-        if syn and syn.queue_on_teleport then
-            success = pcall(function() syn.queue_on_teleport(queueCode) end)
-        elseif queue_on_teleport then
-            success = pcall(function() queue_on_teleport(queueCode) end)
-        elseif fluxus and fluxus.queue_on_teleport then
-            success = pcall(function() fluxus.queue_on_teleport(queueCode) end)
-        end
-        return success
-    end
-    
-    -- Queue at startup
-    if queueScript() then
-        print("[AUTO-RELOAD] Queued successfully")
-    else
-        print("[AUTO-RELOAD] Failed to queue")
-    end
+-- Define queueteleport function (like IY does)
+local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+
+if queueteleport then
+    print("[AUTO-RELOAD] Queue function found and ready")
+else
+    warn("[AUTO-RELOAD] No queue function available")
 end
 
 
@@ -667,33 +653,30 @@ ServerSection:CreateButton("Copy Server ID", function()
 end)
 
 ServerSection:CreateButton("Rejoin Server", function()
-    Window:Notify("Rejoining in 3 seconds...")
-    
-    -- Queue the script multiple times with delays
-    local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
-    
-    task.spawn(function()
-        for i = 1, 5 do
-            pcall(function()
-                if syn and syn.queue_on_teleport then
-                    syn.queue_on_teleport(queueCode)
-                elseif queue_on_teleport then
-                    queue_on_teleport(queueCode)
-                elseif fluxus and fluxus.queue_on_teleport then
-                    fluxus.queue_on_teleport(queueCode)
-                end
-            end)
-            if i < 5 then task.wait(0.5) end
-        end
-        
-        print("[REJOIN] Queued script 5 times")
-        
-        -- Wait a moment then teleport
-        task.wait(0.5)
-        pcall(function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
+    if queueteleport and HUB_URL ~= "" then
+        -- Queue the script RIGHT before teleporting (like IY does)
+        local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
+        local success = pcall(function()
+            queueteleport(queueCode)
         end)
+        
+        if success then
+            print("[REJOIN] Script queued successfully")
+        else
+            warn("[REJOIN] Failed to queue script")
+        end
+    end
+    
+    -- Small delay then teleport
+    task.wait(0.3)
+    
+    local success, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId)
     end)
+    
+    if not success then
+        warn("[REJOIN] Teleport failed:", err)
+    end
 end)
 
 ServerSection:CreateButton("Reset Character", function()
@@ -829,20 +812,5 @@ resetFunctionalToggles()
 game:BindToClose(function()
     pcall(function() Window:SaveConfig("Default") end)
 end)
-
--- Queue one more time after everything loads
-if HUB_URL ~= "" then
-    local queueCode = 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
-    pcall(function()
-        if syn and syn.queue_on_teleport then
-            syn.queue_on_teleport(queueCode)
-        elseif queue_on_teleport then
-            queue_on_teleport(queueCode)
-        elseif fluxus and fluxus.queue_on_teleport then
-            fluxus.queue_on_teleport(queueCode)
-        end
-    end)
-    print("[AUTO-RELOAD] Final queue set")
-end
 
 print("[HUB] Ready!")
