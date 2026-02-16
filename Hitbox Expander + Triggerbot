@@ -31,7 +31,7 @@ end
 
 local Window
 pcall(function()
-    Window = Library:CreateWindow("Hitbox & TriggerBot", "V1.0")
+    Window = Library:CreateWindow("SPOOKALICIOUS V4", "Hitbox & TriggerBot")
 end)
 
 
@@ -160,6 +160,7 @@ local HitboxSettings = {
     ApplyColor = true,
     ApplyCanCollide = true,
     ApplyMassless = true,
+    LockZAxis = true,  -- NEW: Lock Z-axis to 1
 }
 
 local editedCharacters = {}
@@ -231,7 +232,9 @@ local function applyHitbox(character)
         end
     end
 
-    safeSet(hitbox, "Size", Vector3.new(HitboxSettings.HitboxSize, HitboxSettings.HitboxSize, HitboxSettings.HitboxSize))
+    -- Apply hitbox size with optional Z-axis lock
+    local zSize = HitboxSettings.LockZAxis and 1 or HitboxSettings.HitboxSize
+    safeSet(hitbox, "Size", Vector3.new(HitboxSettings.HitboxSize, HitboxSettings.HitboxSize, zSize))
 
     if HitboxSettings.ApplyTransparency then
         safeSet(hitbox, "Transparency", HitboxSettings.Transparency)
@@ -303,6 +306,9 @@ local triggerConfig = {
     HoldClick = true,
     TeamExclusionMode = "folder",
     MaxDistance = nil,
+    ExclusionRadius = 5,  -- Lowered from 10 to 5 studs
+    DebugMode = false,  -- NEW: Show debug info
+    AggressiveMode = false,  -- NEW: Minimal validation (shoot everything)
 }
 
 local mouse = player:GetMouse()
@@ -456,52 +462,216 @@ end
 
 
 --══════════════════════════════════════════════════════════════
---  TRIGGERBOT TARGET VALIDATION
+--  IMPROVED TRIGGERBOT WITH HYBRID RAYCAST + MOUSE.TARGET
+--  - Uses raycast for accurate targeting through crosshair
+--  - Falls back to mouse.Target for close range & partial obstruction
+--  - Automatically excludes player character and held weapons
 --══════════════════════════════════════════════════════════════
 
-local function getValidTarget(part)
-    if not part then return false end
+-- Create raycast params for triggerbot
+local raycastParams = RaycastParams.new()
+raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+raycastParams.IgnoreWater = true
 
-    local model = getCharacterModel(part)
-    if model then
-        if isMyCharacter(model) then return false end
-        if not inRange(model) then return false end
-        if not isAliveFast(model) then return false end
-        if model:FindFirstChild("Ragdoll") or model:FindFirstChild("Ragdolled") then return false end
-        if model:FindFirstChild("Dead") or model:FindFirstChild("IsDead") then return false end
-        if not model:FindFirstChild("HumanoidRootPart") and Players:GetPlayerFromCharacter(model) then return false end
-        local mode = triggerConfig.TeamExclusionMode
-        if mode == "team" and isTeammate(model) then return false end
-        if mode == "folder" and isInSameParentContainer(model) then return false end
-        if mode == "players" and Players:GetPlayerFromCharacter(model) then return false end
-        if model:FindFirstChildOfClass("Humanoid") then return true end
+-- Function to get all parts to exclude (player character + equipped tools)
+local function getExclusionList()
+    local exclusionList = {}
+    local char = player.Character
+    if char then
+        table.insert(exclusionList, char)
+        -- Also exclude any tools/weapons the player is holding
+        for _, child in ipairs(char:GetChildren()) do
+            if child:IsA("Tool") or child:IsA("Accoutrement") then
+                table.insert(exclusionList, child)
+            end
+        end
     end
+    return exclusionList
+end
 
-    local playerModel, ownerPlayer = getOwningPlayerModel(part)
-    if playerModel and ownerPlayer then
-        if ownerPlayer == player then return false end
-        if isMyCharacter(playerModel) then return false end
-        if not inRange(playerModel) then return false end
-        if isDeadCustomModel(playerModel) then return false end
-        local mode = triggerConfig.TeamExclusionMode
-        if mode == "team" and isTeammatePlayer(ownerPlayer) then return false end
-        if mode == "folder" and isInSameParentContainer(playerModel) then return false end
-        return true
+-- Function to check if a part belongs to player or is too close (weapon exclusion)
+local function isPartTooClose(part)
+    if not part or not part:IsA("BasePart") then return false end
+    local char = player.Character
+    if not char then return false end
+    
+    -- Primary check: Is this part literally part of our character or held items?
+    if part:IsDescendantOf(char) then 
+        if triggerConfig.DebugMode then print("[TB] Part is descendant of player") end
+        return true 
     end
-
+    
+    -- Secondary check: Is this part VERY close? (only for extremely close parts)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local distance = (part.Position - hrp.Position).Magnitude
+        if distance < triggerConfig.ExclusionRadius then
+            if triggerConfig.DebugMode then print("[TB] Part within exclusion radius: " .. distance) end
+            return true
+        end
+    end
+    
     return false
 end
 
+-- Function to get target model from a part
+local function getTargetModelFromPart(hitPart)
+    if not hitPart then 
+        if triggerConfig.DebugMode then print("[TB] No hitPart") end
+        return nil 
+    end
+    
+    if triggerConfig.DebugMode then print("[TB] Checking part: " .. hitPart.Name) end
+    
+    -- Exclude parts that are too close (likely our own weapon)
+    if isPartTooClose(hitPart) then 
+        if triggerConfig.DebugMode then print("[TB] Part too close/own part") end
+        return nil 
+    end
+    
+    -- Find the model this part belongs to
+    local model = getCharacterModel(hitPart)
+    if model then 
+        if triggerConfig.DebugMode then print("[TB] Found character model: " .. model.Name) end
+        return model
+    end
+    
+    -- Try getting player model
+    local playerModel, ownerPlayer = getOwningPlayerModel(hitPart)
+    if playerModel and ownerPlayer then
+        if triggerConfig.DebugMode then print("[TB] Found player model: " .. playerModel.Name .. " (owner: " .. ownerPlayer.Name .. ")") end
+        return playerModel
+    end
+    
+    if triggerConfig.DebugMode then print("[TB] No valid model found for part") end
+    return nil
+end
+
+-- HYBRID: Try raycast first, then fallback to mouse.Target
+local function getHybridTarget()
+    local camera = Workspace.CurrentCamera
+    if not camera then 
+        if triggerConfig.DebugMode then print("[TB] No camera, using mouse.Target") end
+        return mouse.Target and getTargetModelFromPart(mouse.Target) 
+    end
+    
+    -- Update exclusion list
+    raycastParams.FilterDescendantsInstances = getExclusionList()
+    
+    -- TRY 1: Raycast from camera center (best for accuracy)
+    local ray = camera:ScreenPointToRay(lastX, lastY)
+    local maxDistance = triggerConfig.MaxDistance or 1000
+    local result = Workspace:Raycast(ray.Origin, ray.Direction * maxDistance, raycastParams)
+    
+    if result and result.Instance then
+        if triggerConfig.DebugMode then print("[TB] Raycast hit: " .. result.Instance.Name) end
+        local model = getTargetModelFromPart(result.Instance)
+        if model then 
+            if triggerConfig.DebugMode then print("[TB] Raycast found model: " .. model.Name) end
+            return model 
+        end
+    else
+        if triggerConfig.DebugMode then print("[TB] Raycast missed") end
+    end
+    
+    -- TRY 2: Fallback to mouse.Target (handles close range + partial obstruction)
+    if mouse.Target then
+        if triggerConfig.DebugMode then print("[TB] Mouse.Target: " .. mouse.Target.Name) end
+        local model = getTargetModelFromPart(mouse.Target)
+        if model then 
+            if triggerConfig.DebugMode then print("[TB] Mouse found model: " .. model.Name) end
+            return model 
+        end
+    else
+        if triggerConfig.DebugMode then print("[TB] No mouse.Target") end
+    end
+    
+    return nil
+end
+
+-- Improved target validation for raycast-based targeting
+local function isValidRaycastTarget(model)
+    if not model then 
+        if triggerConfig.DebugMode then print("[TB] No model") end
+        return false 
+    end
+    
+    -- Exclude own character (ALWAYS)
+    if isMyCharacter(model) then 
+        if triggerConfig.DebugMode then print("[TB] Own character") end
+        return false 
+    end
+    
+    -- AGGRESSIVE MODE: Minimal checks - shoot anything with a humanoid
+    if triggerConfig.AggressiveMode then
+        local humanoid = model:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            if triggerConfig.DebugMode then print("[TB] ✓ AGGRESSIVE MODE: " .. model.Name) end
+            return true
+        else
+            if triggerConfig.DebugMode then print("[TB] No humanoid (aggressive mode)") end
+            return false
+        end
+    end
+    
+    -- NORMAL MODE: Standard validation
+    -- Check if alive (simplified check)
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if humanoid and humanoid.Health <= 0 then 
+        if triggerConfig.DebugMode then print("[TB] Dead (health <= 0)") end
+        return false 
+    end
+    
+    -- Check distance if configured
+    if not inRange(model) then 
+        if triggerConfig.DebugMode then print("[TB] Out of range") end
+        return false 
+    end
+    
+    -- Apply team exclusion modes
+    local mode = triggerConfig.TeamExclusionMode
+    
+    if mode == "team" then
+        if isTeammate(model) then 
+            if triggerConfig.DebugMode then print("[TB] Teammate (team mode)") end
+            return false 
+        end
+    elseif mode == "folder" then
+        if isInSameParentContainer(model) then 
+            if triggerConfig.DebugMode then print("[TB] Same folder") end
+            return false 
+        end
+    elseif mode == "players" then
+        if Players:GetPlayerFromCharacter(model) then 
+            if triggerConfig.DebugMode then print("[TB] Is player (players mode)") end
+            return false 
+        end
+    end
+    -- mode == "none" allows all targets
+    
+    if triggerConfig.DebugMode then 
+        print("[TB] ✓ VALID TARGET: " .. model.Name) 
+    end
+    
+    return true
+end
+
+-- Main triggerbot loop with hybrid raycast + mouse.Target
 RunService.RenderStepped:Connect(function()
     if not triggerBotEnabled then
         if tbClicking then setClick(false) end
         return
     end
+    
     if triggerConfig.HoldClick and not rightDown then
         if tbClicking then setClick(false) end
         return
     end
-    if getValidTarget(mouse.Target) then
+    
+    -- Use hybrid system: raycast + mouse.Target fallback
+    local targetModel = getHybridTarget()
+    
+    if targetModel and isValidRaycastTarget(targetModel) then
         spamClick()
     else
         if tbClicking then setClick(false) end
@@ -560,6 +730,11 @@ HBTargetSection:CreateTextbox("Hitbox Part Name", "Head", function(text)
 end)
 
 local HBPropSection = HitboxPage:CreateSection("Property Toggles")
+
+HBPropSection:CreateToggle("Lock Z-Axis to 1", { Toggled = true }, function(v)
+    HitboxSettings.LockZAxis = v; restoreAllHitboxes()
+    Window:Notify("Z-Axis Lock: " .. (v and "ON" or "OFF"))
+end)
 
 HBPropSection:CreateToggle("Apply Transparency", { Toggled = true }, function(v)
     HitboxSettings.ApplyTransparency = v; restoreAllHitboxes()
@@ -627,6 +802,30 @@ TBConfigSection:CreateSlider("Max Distance", { Min = 0, Max = 500, DefaultValue 
         Window:Notify("Distance: " .. value .. " studs")
     end
 end)
+
+TBConfigSection:CreateSlider("Exclusion Radius", { Min = 3, Max = 20, DefaultValue = 5, Step = 1 }, function(value)
+    triggerConfig.ExclusionRadius = value
+    Window:Notify("Exclusion Radius: " .. value .. " studs")
+end)
+
+TBConfigSection:CreateToggle("Debug Mode", { Toggled = false }, function(value)
+    triggerConfig.DebugMode = value
+    Window:Notify("Debug Mode: " .. (value and "ON (check console)" or "OFF"))
+end)
+
+TBConfigSection:CreateToggle("Aggressive Mode", { Toggled = false }, function(value)
+    triggerConfig.AggressiveMode = value
+    Window:Notify("Aggressive: " .. (value and "ON (shoots everything!)" or "OFF"))
+end)
+
+TBConfigSection:CreateDivider()
+TBConfigSection:CreateLabel("Uses hybrid targeting:")
+TBConfigSection:CreateLabel("Raycast + Mouse fallback for close range")
+TBConfigSection:CreateDivider()
+TBConfigSection:CreateLabel("Not working? Try:")
+TBConfigSection:CreateLabel("1. Enable Debug Mode (check console)")
+TBConfigSection:CreateLabel("2. Try Aggressive Mode")
+TBConfigSection:CreateLabel("3. Change Exclusion Mode to 'none'")
 
 local TBTeamSection = TriggerPage:CreateSection("Team Exclusion")
 
