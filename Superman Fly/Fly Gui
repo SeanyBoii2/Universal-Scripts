@@ -62,7 +62,7 @@ end
 
 local Window
 pcall(function()
-    Window = Library:CreateWindow("SUPERMAN FLY", "V1.0")
+    Window = Library:CreateWindow("SUPERMAN FLY", "SPOOKALICIOUS V4")
 end)
 
 
