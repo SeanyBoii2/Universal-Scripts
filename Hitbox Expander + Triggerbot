@@ -31,7 +31,7 @@ end
 
 local Window
 pcall(function()
-    Window = Library:CreateWindow("SPOOKALICIOUS V4", "Hitbox & TriggerBot")
+    Window = Library:CreateWindow("Hitbox & TriggerBot", "SPOOKALICIOUS V4")
 end)
 
 
