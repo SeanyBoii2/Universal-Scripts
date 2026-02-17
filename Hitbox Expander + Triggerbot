@@ -151,16 +151,16 @@ local HitboxSettings = {
     Radius = 150,
     TargetMode = "NPCs",
     HitboxPartName = "Head",
-    Transparency = 0.99,
+    Transparency = 0.98,
     Material = Enum.Material.Neon,
     Color = BrickColor.new("Really blue"),
-    PartsPerStep = 25,
+    PartsPerStep = 50,
     ApplyTransparency = true,
     ApplyMaterial = true,
     ApplyColor = true,
     ApplyCanCollide = true,
     ApplyMassless = true,
-    LockZAxis = true,  -- NEW: Lock Z-axis to 1
+    LockZAxis = fale,  -- NEW: Lock Z-axis to 1
 }
 
 local editedCharacters = {}
