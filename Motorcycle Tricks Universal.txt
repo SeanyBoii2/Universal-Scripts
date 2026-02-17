@@ -1,6 +1,6 @@
 --[[
     ╔══════════════════════════════════════════════════════════════╗
-    ║               MOTORCYCLE TRICKS GUI SCRIPT                   ║
+    ║            SPOOKALICIOUS V4 - MOTORCYCLE TRICKS              ║
     ╠══════════════════════════════════════════════════════════════╣
     ║  Created by: spookyie                                        ║
     ║  Discord: spookyie                                           ║
@@ -21,6 +21,7 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
@@ -347,41 +348,34 @@ local function resetState()
 end
 
 ------------------------------------------------------
---             REVAMPED GUI                         --
+--        BLACK AND WHITE THEME                     --
 ------------------------------------------------------
 
--- Theme
+-- Monochrome Theme
 local T = {
-	Bg         = Color3.fromRGB(12, 12, 16),
-	Surface    = Color3.fromRGB(20, 20, 26),
-	Card       = Color3.fromRGB(26, 26, 34),
-	CardHover  = Color3.fromRGB(34, 34, 44),
-	Border     = Color3.fromRGB(38, 38, 50),
-	Accent     = Color3.fromRGB(99, 102, 241),   -- Indigo
-	AccentGlow = Color3.fromRGB(129, 132, 255),
-	Text       = Color3.fromRGB(235, 235, 245),
-	TextDim    = Color3.fromRGB(115, 115, 135),
-	TextMuted  = Color3.fromRGB(75, 75, 95),
-	Green      = Color3.fromRGB(52, 211, 153),
-	Red        = Color3.fromRGB(248, 113, 113),
-	Orange     = Color3.fromRGB(251, 191, 36),
-	Pink       = Color3.fromRGB(244, 114, 182),
-	Blue       = Color3.fromRGB(96, 165, 250),
-	Cyan       = Color3.fromRGB(34, 211, 238),
-	Purple     = Color3.fromRGB(167, 139, 250),
-	Teal       = Color3.fromRGB(45, 212, 191),
+	Bg         = Color3.fromRGB(18, 18, 18),
+	Surface    = Color3.fromRGB(25, 25, 25),
+	Card       = Color3.fromRGB(30, 30, 30),
+	CardHover  = Color3.fromRGB(40, 40, 40),
+	Border     = Color3.fromRGB(50, 50, 50),
+	Accent     = Color3.fromRGB(200, 200, 200),
+	AccentGlow = Color3.fromRGB(220, 220, 220),
+	Text       = Color3.fromRGB(255, 255, 255),
+	TextDim    = Color3.fromRGB(180, 180, 180),
+	TextMuted  = Color3.fromRGB(120, 120, 120),
+	ActiveDot  = Color3.fromRGB(255, 255, 255),
 }
 
--- Mode color map
+-- All modes use grayscale
 local ModeColors = {
-	Wheelie     = T.Green,
-	Stoppie     = T.Orange,
-	SideWheelie = T.Pink,
-	BackHop     = T.Red,
-	Jump        = T.Blue,
-	Backflip    = T.Purple,
-	Frontflip   = T.Teal,
-	AutoSteer   = T.Cyan,
+	Wheelie     = Color3.fromRGB(200, 200, 200),
+	Stoppie     = Color3.fromRGB(200, 200, 200),
+	SideWheelie = Color3.fromRGB(200, 200, 200),
+	BackHop     = Color3.fromRGB(200, 200, 200),
+	Jump        = Color3.fromRGB(200, 200, 200),
+	Backflip    = Color3.fromRGB(200, 200, 200),
+	Frontflip   = Color3.fromRGB(200, 200, 200),
+	AutoSteer   = Color3.fromRGB(200, 200, 200),
 }
 
 local ModeIcons = {
@@ -419,17 +413,18 @@ end
 local statusLabelRef, updateSliderRef, switchModeRef
 
 local function createGUI()
-	-- ScreenGui
+	-- ScreenGui in CoreGui to overlay everything
 	local sg = Instance.new("ScreenGui")
 	sg.Name = "MotorcycleTricksGUI"
 	sg.ResetOnSpawn = false
 	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	sg.DisplayOrder = 10
+	sg.DisplayOrder = 999999999
+	sg.Parent = CoreGui
 
 	-- Main container
 	local main = Instance.new("Frame")
 	main.Name = "Main"
-	main.Size = UDim2.new(0, 300, 0, 0) -- starts collapsed for animation
+	main.Size = UDim2.new(0, 300, 0, 0)
 	main.Position = UDim2.new(0.5, -150, 0.5, 0)
 	main.AnchorPoint = Vector2.new(0.5, 0.5)
 	main.BackgroundColor3 = T.Bg
@@ -439,34 +434,29 @@ local function createGUI()
 	corner(main, 14)
 	stroke(main, T.Border, 1)
 
-	-- Outer glow/shadow
-	local shadow = Instance.new("ImageLabel")
-	shadow.Size = UDim2.new(1, 40, 1, 40)
-	shadow.Position = UDim2.new(0.5, 0, 0.5, 0)
-	shadow.AnchorPoint = Vector2.new(0.5, 0.5)
-	shadow.BackgroundTransparency = 1
-	shadow.Image = "rbxassetid://5554236805"
-	shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-	shadow.ImageTransparency = 0.4
-	shadow.ScaleType = Enum.ScaleType.Slice
-	shadow.SliceCenter = Rect.new(23, 23, 277, 277)
-	shadow.ZIndex = -1
-	shadow.Parent = main
-
 	----------------------------------------------
 	-- HEADER
 	----------------------------------------------
 	local header = Instance.new("Frame")
 	header.Name = "Header"
-	header.Size = UDim2.new(1, 0, 0, 52)
+	header.Size = UDim2.new(1, 0, 0, 70)
 	header.BackgroundColor3 = T.Surface
 	header.BorderSizePixel = 0
 	header.Parent = main
 	corner(header, 14)
-	-- Cover bottom corners
+	
 	local hCover = Instance.new("Frame")
 	hCover.Size = UDim2.new(1, 0, 0, 16); hCover.Position = UDim2.new(0, 0, 1, -16)
 	hCover.BackgroundColor3 = T.Surface; hCover.BorderSizePixel = 0; hCover.Parent = header
+
+	-- Skull Icon
+	local SkullIcon = Instance.new("ImageLabel", header)
+	SkullIcon.Size = UDim2.new(0, 40, 0, 40)
+	SkullIcon.Position = UDim2.new(0, 12, 0, 15)
+	SkullIcon.BackgroundTransparency = 1
+	SkullIcon.Image = "rbxassetid://93796493145546"
+	SkullIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+	SkullIcon.ScaleType = Enum.ScaleType.Fit
 
 	-- Accent bar
 	local accentBar = Instance.new("Frame")
@@ -475,37 +465,25 @@ local function createGUI()
 	accentBar.BackgroundColor3 = T.Accent
 	accentBar.BorderSizePixel = 0
 	accentBar.Parent = header
-	local accentGrad = Instance.new("UIGradient")
-	accentGrad.Color = ColorSequence.new{
-		ColorSequenceKeypoint.new(0, T.Accent),
-		ColorSequenceKeypoint.new(0.5, T.AccentGlow),
-		ColorSequenceKeypoint.new(1, T.Accent),
-	}
-	accentGrad.Transparency = NumberSequence.new{
-		NumberSequenceKeypoint.new(0, 0.4),
-		NumberSequenceKeypoint.new(0.5, 0),
-		NumberSequenceKeypoint.new(1, 0.4),
-	}
-	accentGrad.Parent = accentBar
 
 	-- Title
 	local titleLabel = Instance.new("TextLabel")
-	titleLabel.Size = UDim2.new(1, -100, 0, 20)
-	titleLabel.Position = UDim2.new(0, 16, 0, 9)
+	titleLabel.Size = UDim2.new(1, -140, 0, 20)
+	titleLabel.Position = UDim2.new(0, 60, 0, 14)
 	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "VEHICLE TRICKS"
+	titleLabel.Text = "SPOOKALICIOUS V4"
 	titleLabel.TextColor3 = T.Text
-	titleLabel.TextSize = 15
+	titleLabel.TextSize = 14
 	titleLabel.Font = Enum.Font.GothamBold
 	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 	titleLabel.Parent = header
 
 	-- Subtitle
 	local subLabel = Instance.new("TextLabel")
-	subLabel.Size = UDim2.new(1, -100, 0, 14)
-	subLabel.Position = UDim2.new(0, 16, 0, 30)
+	subLabel.Size = UDim2.new(1, -140, 0, 14)
+	subLabel.Position = UDim2.new(0, 60, 0, 36)
 	subLabel.BackgroundTransparency = 1
-	subLabel.Text = "by spookyie"
+	subLabel.Text = "MOTORCYCLE TRICKS"
 	subLabel.TextColor3 = T.TextMuted
 	subLabel.TextSize = 10
 	subLabel.Font = Enum.Font.Gotham
@@ -515,7 +493,7 @@ local function createGUI()
 	-- Header buttons container
 	local hBtns = Instance.new("Frame")
 	hBtns.Size = UDim2.new(0, 76, 0, 28)
-	hBtns.Position = UDim2.new(1, -88, 0.5, -14)
+	hBtns.Position = UDim2.new(1, -88, 0, 14)
 	hBtns.BackgroundTransparency = 1
 	hBtns.Parent = header
 
@@ -541,8 +519,8 @@ local function createGUI()
 	----------------------------------------------
 	local content = Instance.new("ScrollingFrame")
 	content.Name = "Content"
-	content.Size = UDim2.new(1, 0, 1, -52)
-	content.Position = UDim2.new(0, 0, 0, 52)
+	content.Size = UDim2.new(1, 0, 1, -70)
+	content.Position = UDim2.new(0, 0, 0, 70)
 	content.BackgroundTransparency = 1
 	content.BorderSizePixel = 0
 	content.ScrollBarThickness = 2
@@ -608,7 +586,7 @@ local function createGUI()
 		local iconBg = Instance.new("Frame")
 		iconBg.Size = UDim2.new(0, 22, 0, 22)
 		iconBg.Position = UDim2.new(0, 8, 0.5, -11)
-		iconBg.BackgroundColor3 = ModeColors[mode]
+		iconBg.BackgroundColor3 = T.Accent
 		iconBg.BackgroundTransparency = 0.85
 		iconBg.BorderSizePixel = 0
 		iconBg.Parent = btn
@@ -618,7 +596,7 @@ local function createGUI()
 		iconLbl.Size = UDim2.new(1, 0, 1, 0)
 		iconLbl.BackgroundTransparency = 1
 		iconLbl.Text = ModeIcons[mode]
-		iconLbl.TextColor3 = ModeColors[mode]
+		iconLbl.TextColor3 = T.Accent
 		iconLbl.TextSize = 12
 		iconLbl.Font = Enum.Font.GothamBold
 		iconLbl.Parent = iconBg
@@ -641,7 +619,7 @@ local function createGUI()
 		dot.Name = "Dot"
 		dot.Size = UDim2.new(0, 5, 0, 5)
 		dot.Position = UDim2.new(1, -12, 0.5, -2.5)
-		dot.BackgroundColor3 = ModeColors[mode]
+		dot.BackgroundColor3 = T.ActiveDot
 		dot.BackgroundTransparency = 1
 		dot.BorderSizePixel = 0
 		dot.Parent = btn
@@ -692,7 +670,7 @@ local function createGUI()
 	sliderValueLabel.Position = UDim2.new(1, -60, 0, 6)
 	sliderValueLabel.BackgroundTransparency = 1
 	sliderValueLabel.Text = "45"
-	sliderValueLabel.TextColor3 = T.Green
+	sliderValueLabel.TextColor3 = T.Accent
 	sliderValueLabel.TextSize = 11
 	sliderValueLabel.Font = Enum.Font.GothamBold
 	sliderValueLabel.TextXAlignment = Enum.TextXAlignment.Right
@@ -712,7 +690,7 @@ local function createGUI()
 	local sliderFill = Instance.new("Frame")
 	sliderFill.Name = "Fill"
 	sliderFill.Size = UDim2.new(0.5, 0, 1, 0)
-	sliderFill.BackgroundColor3 = T.Green
+	sliderFill.BackgroundColor3 = T.Accent
 	sliderFill.BorderSizePixel = 0
 	sliderFill.Parent = sliderTrack
 	corner(sliderFill, 2)
@@ -728,7 +706,7 @@ local function createGUI()
 	sliderKnob.ZIndex = 3
 	sliderKnob.Parent = sliderSection
 	corner(sliderKnob, 7)
-	local knobStroke = stroke(sliderKnob, T.Green, 2)
+	local knobStroke = stroke(sliderKnob, T.Accent, 2)
 
 	----------------------------------------------
 	-- SECTION: Settings Toggles
@@ -886,7 +864,7 @@ local function createGUI()
 	----------------------------------------------
 	local function updateSlider(value)
 		local mode = modeSettings[currentMode]
-		local col = ModeColors[currentMode] or T.Accent
+		local col = T.Accent
 		local labelText, displayVal
 		local normalized = 0
 
@@ -982,19 +960,17 @@ local function createGUI()
 	----------------------------------------------
 	local function switchMode(mode)
 		currentMode = mode
-		local col = ModeColors[mode] or T.Accent
+		local col = T.Accent
 
 		-- Reset all buttons
 		for m, refs in pairs(modeButtons) do
 			local isActive = (m == mode)
-			local c = ModeColors[m]
-			tw(refs.button, {BackgroundColor3 = isActive and c or T.Card}, 0.2):Play()
+			tw(refs.button, {BackgroundColor3 = isActive and T.Accent or T.Card}, 0.2):Play()
 			refs.button.BackgroundTransparency = isActive and 0.85 or 0
 			tw(refs.nameLbl, {TextColor3 = isActive and T.Text or T.TextDim}, 0.2):Play()
 			tw(refs.dot, {BackgroundTransparency = isActive and 0 or 1}, 0.2):Play()
-			-- Update stroke
 			local s = refs.button:FindFirstChildOfClass("UIStroke")
-			if s then tw(s, {Color = isActive and c or T.Border}, 0.2):Play() end
+			if s then tw(s, {Color = isActive and T.Accent or T.Border}, 0.2):Play() end
 		end
 
 		-- Update slider
@@ -1034,7 +1010,6 @@ local function createGUI()
 	-- REFRESH
 	----------------------------------------------
 	refreshBtn.MouseButton1Click:Connect(function()
-		-- Reset all state
 		isActive = false; motorcycle = nil; originalNeutralCFrame = nil; targetYRotation = 0
 		if bodyGyro and bodyGyro.Parent then bodyGyro:Destroy() end; bodyGyro = nil
 		if bodyPosition and bodyPosition.Parent then bodyPosition:Destroy() end; bodyPosition = nil
@@ -1044,7 +1019,6 @@ local function createGUI()
 		if waypointMarker and waypointMarker.Parent then waypointMarker:Destroy() end
 		waypointMarker = nil; waypointPosition = nil
 
-		-- Fade OUT
 		tw(main, {BackgroundTransparency = 0.7}, 0.2):Play()
 		for _, child in ipairs(main:GetDescendants()) do
 			if child:IsA("TextLabel") or child:IsA("TextButton") then
@@ -1053,14 +1027,10 @@ local function createGUI()
 			if child:IsA("Frame") and child.BackgroundTransparency < 0.8 and child.Name ~= "Fill" then
 				tw(child, {BackgroundTransparency = 0.7}, 0.2):Play()
 			end
-			if child:IsA("ImageLabel") then
-				tw(child, {ImageTransparency = 0.9}, 0.2):Play()
-			end
 		end
 
 		task.wait(0.25)
 
-		-- Fade IN
 		tw(main, {BackgroundTransparency = 0}, 0.25):Play()
 		for _, child in ipairs(main:GetDescendants()) do
 			if child:IsA("TextLabel") then
@@ -1068,12 +1038,8 @@ local function createGUI()
 			elseif child:IsA("TextButton") then
 				tw(child, {TextTransparency = 0}, 0.25):Play()
 			end
-			if child:IsA("ImageLabel") and child.Name == "Shadow" then
-				tw(child, {ImageTransparency = 0.4}, 0.25):Play()
-			end
 		end
 
-		-- Re-apply correct transparencies for mode buttons after fade
 		task.wait(0.3)
 		if switchModeRef then switchModeRef(currentMode) end
 	end)
@@ -1084,7 +1050,6 @@ local function createGUI()
 	local minimized = false
 	local TARGET_HEIGHT = 520
 
-	-- Dragging
 	local dragging, dragStart, startPos = false, nil, nil
 
 	header.InputBegan:Connect(function(input)
@@ -1109,19 +1074,18 @@ local function createGUI()
 	minBtn.MouseButton1Click:Connect(function()
 		minimized = not minimized
 		if minimized then
-			tw(main, {Size = UDim2.new(0, 300, 0, 52)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In):Play()
+			tw(main, {Size = UDim2.new(0, 300, 0, 70)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In):Play()
 		else
 			tw(main, {Size = UDim2.new(0, 300, 0, TARGET_HEIGHT)}, 0.35, Enum.EasingStyle.Back):Play()
 		end
 	end)
 
-	-- M key toggle
 	UserInputService.InputBegan:Connect(function(input, gp)
 		if gp then return end
 		if input.KeyCode == Enum.KeyCode.M then
 			minimized = not minimized
 			if minimized then
-				tw(main, {Size = UDim2.new(0, 300, 0, 52)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In):Play()
+				tw(main, {Size = UDim2.new(0, 300, 0, 70)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In):Play()
 			else
 				tw(main, {Size = UDim2.new(0, 300, 0, TARGET_HEIGHT)}, 0.35, Enum.EasingStyle.Back):Play()
 			end
@@ -1133,19 +1097,17 @@ local function createGUI()
 	----------------------------------------------
 	main.BackgroundTransparency = 1
 	main.Size = UDim2.new(0, 300, 0, 0)
-	sg.Parent = player:WaitForChild("PlayerGui")
 
 	task.wait(0.05)
 	tw(main, {Size = UDim2.new(0, 300, 0, TARGET_HEIGHT), BackgroundTransparency = 0}, 0.45, Enum.EasingStyle.Back):Play()
 
-	-- Initialize mode
 	switchMode("Wheelie")
 
 	----------------------------------------------
 	-- STATUS UPDATE FUNCTION
 	----------------------------------------------
 	local function updateStatus(active)
-		local col = ModeColors[currentMode] or T.Accent
+		local col = T.Accent
 		if active then
 			statusLabel.Text = currentMode:upper() .. " ACTIVE"
 			statusLabel.TextColor3 = col
@@ -1153,8 +1115,8 @@ local function createGUI()
 		else
 			if currentMode == "AutoSteer" then
 				statusLabel.Text = "Click to set waypoint"
-				statusLabel.TextColor3 = T.Cyan
-				statusDot.BackgroundColor3 = T.Cyan
+				statusLabel.TextColor3 = T.Accent
+				statusDot.BackgroundColor3 = T.Accent
 			else
 				local keyName = activationKey == Enum.KeyCode.LeftControl and "CTRL" or "SHIFT"
 				statusLabel.Text = "Press " .. keyName .. " to activate"
@@ -1177,7 +1139,6 @@ local updateStatus = createGUI()
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 
-	-- Waypoint placement for AutoSteer
 	if input.UserInputType == Enum.UserInputType.MouseButton1 and currentMode == "AutoSteer" then
 		local mouse = player:GetMouse()
 		local camera = workspace.CurrentCamera
@@ -1226,12 +1187,12 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			waypointMarker.Anchored = true
 			waypointMarker.CanCollide = false
 			waypointMarker.Material = Enum.Material.Neon
-			waypointMarker.Color = Color3.fromRGB(34, 211, 238)
+			waypointMarker.Color = Color3.fromRGB(255, 255, 255)
 			waypointMarker.Transparency = 0.4
 			waypointMarker.Parent = workspace
 			local pl = Instance.new("PointLight")
 			pl.Brightness = 1.5; pl.Range = 15
-			pl.Color = Color3.fromRGB(34, 211, 238)
+			pl.Color = Color3.fromRGB(255, 255, 255)
 			pl.Parent = waypointMarker
 			doTrick()
 			updateStatus(true)
@@ -1267,7 +1228,6 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
 	end
 end)
 
--- Mouse wheel angle control
 UserInputService.InputChanged:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 	if input.UserInputType == Enum.UserInputType.MouseWheel and mouseWheelControlEnabled then
@@ -1287,7 +1247,6 @@ UserInputService.InputChanged:Connect(function(input, gameProcessed)
 	end
 end)
 
--- Cleanup
 character.Humanoid.Died:Connect(function()
 	if updateConnection then updateConnection:Disconnect(); updateConnection = nil end
 	stopTrick()
@@ -1305,4 +1264,4 @@ player.CharacterAdded:Connect(function(newCharacter)
 	end)
 end)
 
-print("✅ Vehicle Tricks loaded!")
+print("✅ SPOOKALICIOUS V4 - Motorcycle Tricks loaded!")
