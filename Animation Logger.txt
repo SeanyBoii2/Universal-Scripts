@@ -1,6 +1,515 @@
---[[
-	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
-]]
-loadstring(game:HttpGet("https://pastebin.com/raw/kBui7A0r"))()
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+local Animator = Humanoid and Humanoid:FindFirstChildOfClass("Animator")
 
--- open source you can steal it i dont really care
+-- Create ScreenGui in CoreGui to overlay everything including core menu
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AnimationLoggerGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 999999999
+ScreenGui.Parent = CoreGui
+
+-- Main Frame
+local Frame = Instance.new("Frame", ScreenGui)
+Frame.Size = UDim2.new(0, 420, 0, 480)
+Frame.Position = UDim2.new(0.5, -210, 0.5, -240)
+Frame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.ClipsDescendants = true
+
+-- Add rounded corners to main frame
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 8)
+mainCorner.Parent = Frame
+
+-- Title Bar
+local TopBar = Instance.new("Frame", Frame)
+TopBar.Size = UDim2.new(1, 0, 0, 80)
+TopBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+TopBar.BorderSizePixel = 0
+
+local topBarCorner = Instance.new("UICorner")
+topBarCorner.CornerRadius = UDim.new(0, 8)
+topBarCorner.Parent = TopBar
+
+-- Skull Icon
+local SkullIcon = Instance.new("ImageLabel", TopBar)
+SkullIcon.Size = UDim2.new(0, 48, 0, 48)
+SkullIcon.Position = UDim2.new(0, 16, 0, 16)
+SkullIcon.BackgroundTransparency = 1
+SkullIcon.Image = "rbxassetid://93796493145546"
+SkullIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+SkullIcon.ScaleType = Enum.ScaleType.Fit
+
+-- Title label
+local titleLabel = Instance.new("TextLabel", TopBar)
+titleLabel.Size = UDim2.new(1, -140, 0, 28)
+titleLabel.Position = UDim2.new(0, 72, 0, 14)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "SPOOKALICIOUS V4"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 16
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Subtitle label
+local subtitleLabel = Instance.new("TextLabel", TopBar)
+subtitleLabel.Size = UDim2.new(1, -140, 0, 18)
+subtitleLabel.Position = UDim2.new(0, 72, 0, 42)
+subtitleLabel.BackgroundTransparency = 1
+subtitleLabel.Text = "ANIMATION LOGGER"
+subtitleLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
+subtitleLabel.TextSize = 11
+subtitleLabel.Font = Enum.Font.Gotham
+subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Close Button (X)
+local CloseButton = Instance.new("TextButton", TopBar)
+CloseButton.Size = UDim2.new(0, 32, 0, 32)
+CloseButton.Position = UDim2.new(1, -40, 0, 8)
+CloseButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+CloseButton.BorderSizePixel = 0
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+CloseButton.TextSize = 16
+CloseButton.Font = Enum.Font.GothamBold
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = CloseButton
+
+CloseButton.MouseEnter:Connect(function()
+    CloseButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+end)
+
+CloseButton.MouseLeave:Connect(function()
+    CloseButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    CloseButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+end)
+
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+-- Tab Container
+local TabContainer = Instance.new("Frame", Frame)
+TabContainer.Size = UDim2.new(1, -32, 0, 40)
+TabContainer.Position = UDim2.new(0, 16, 0, 90)
+TabContainer.BackgroundTransparency = 1
+
+-- Tab Buttons
+local LogTab = Instance.new("TextButton", TabContainer)
+LogTab.Size = UDim2.new(0.48, -4, 1, 0)
+LogTab.Position = UDim2.new(0, 0, 0, 0)
+LogTab.Text = "Logs"
+LogTab.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+LogTab.BorderSizePixel = 0
+LogTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+LogTab.TextSize = 13
+LogTab.Font = Enum.Font.GothamBold
+LogTab.AutoButtonColor = false
+
+local logTabCorner = Instance.new("UICorner")
+logTabCorner.CornerRadius = UDim.new(0, 6)
+logTabCorner.Parent = LogTab
+
+local PlayTab = Instance.new("TextButton", TabContainer)
+PlayTab.Size = UDim2.new(0.48, -4, 1, 0)
+PlayTab.Position = UDim2.new(0.52, 0, 0, 0)
+PlayTab.Text = "Play"
+PlayTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+PlayTab.BorderSizePixel = 0
+PlayTab.TextColor3 = Color3.fromRGB(160, 160, 160)
+PlayTab.TextSize = 13
+PlayTab.Font = Enum.Font.Gotham
+PlayTab.AutoButtonColor = false
+
+local playTabCorner = Instance.new("UICorner")
+playTabCorner.CornerRadius = UDim.new(0, 6)
+playTabCorner.Parent = PlayTab
+
+-- Tab hover effects
+LogTab.MouseEnter:Connect(function()
+    if LogTab.BackgroundColor3 ~= Color3.fromRGB(70, 70, 70) then
+        LogTab.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    end
+end)
+
+LogTab.MouseLeave:Connect(function()
+    if LogTab.BackgroundColor3 == Color3.fromRGB(50, 50, 50) then
+        LogTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    end
+end)
+
+PlayTab.MouseEnter:Connect(function()
+    if PlayTab.BackgroundColor3 ~= Color3.fromRGB(70, 70, 70) then
+        PlayTab.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    end
+end)
+
+PlayTab.MouseLeave:Connect(function()
+    if PlayTab.BackgroundColor3 == Color3.fromRGB(50, 50, 50) then
+        PlayTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    end
+end)
+
+-- Content Frame
+local ContentFrame = Instance.new("Frame", Frame)
+ContentFrame.Size = UDim2.new(1, -32, 1, -150)
+ContentFrame.Position = UDim2.new(0, 16, 0, 140)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.ClipsDescendants = true
+
+-- Log Container (to hold both scroll frame and refresh button)
+local LogContainer = Instance.new("Frame", ContentFrame)
+LogContainer.Size = UDim2.new(1, 0, 1, 0)
+LogContainer.Position = UDim2.new(0, 0, 0, 0)
+LogContainer.BackgroundTransparency = 1
+LogContainer.Visible = true
+
+-- Refresh Button for Logs
+local RefreshButton = Instance.new("TextButton", LogContainer)
+RefreshButton.Size = UDim2.new(1, 0, 0, 44)
+RefreshButton.Position = UDim2.new(0, 0, 0, 0)
+RefreshButton.Text = ""
+RefreshButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+RefreshButton.BorderSizePixel = 0
+RefreshButton.AutoButtonColor = false
+
+local refreshCorner = Instance.new("UICorner")
+refreshCorner.CornerRadius = UDim.new(0, 6)
+refreshCorner.Parent = RefreshButton
+
+-- Refresh Icon (using Roblox decal)
+local RefreshIcon = Instance.new("ImageLabel", RefreshButton)
+RefreshIcon.Size = UDim2.new(0, 22, 0, 22)
+RefreshIcon.Position = UDim2.new(0, 14, 0.5, -11)
+RefreshIcon.BackgroundTransparency = 1
+RefreshIcon.Image = "rbxassetid://113874116544950"
+RefreshIcon.ImageColor3 = Color3.fromRGB(200, 200, 200)
+RefreshIcon.ScaleType = Enum.ScaleType.Fit
+
+-- Refresh Text Label
+local RefreshLabel = Instance.new("TextLabel", RefreshButton)
+RefreshLabel.Size = UDim2.new(1, -48, 1, 0)
+RefreshLabel.Position = UDim2.new(0, 44, 0, 0)
+RefreshLabel.BackgroundTransparency = 1
+RefreshLabel.Text = "Clear All Logs"
+RefreshLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+RefreshLabel.TextSize = 12
+RefreshLabel.Font = Enum.Font.GothamMedium
+RefreshLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+RefreshButton.MouseEnter:Connect(function()
+    RefreshButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    RefreshIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    RefreshLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+end)
+
+RefreshButton.MouseLeave:Connect(function()
+    RefreshButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    RefreshIcon.ImageColor3 = Color3.fromRGB(200, 200, 200)
+    RefreshLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+end)
+
+RefreshButton.MouseButton1Down:Connect(function()
+    RefreshButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+end)
+
+RefreshButton.MouseButton1Up:Connect(function()
+    RefreshButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+end)
+
+-- Log Frame
+local LogFrame = Instance.new("ScrollingFrame", LogContainer)
+LogFrame.Size = UDim2.new(1, 0, 1, -56)
+LogFrame.Position = UDim2.new(0, 0, 0, 56)
+LogFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+LogFrame.ScrollBarThickness = 6
+LogFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+LogFrame.ClipsDescendants = true
+LogFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+LogFrame.BorderSizePixel = 0
+
+local logFrameCorner = Instance.new("UICorner")
+logFrameCorner.CornerRadius = UDim.new(0, 6)
+logFrameCorner.Parent = LogFrame
+
+local UIList = Instance.new("UIListLayout", LogFrame)
+UIList.SortOrder = Enum.SortOrder.LayoutOrder
+UIList.Padding = UDim.new(0, 10)
+
+local listPadding = Instance.new("UIPadding", LogFrame)
+listPadding.PaddingLeft = UDim.new(0, 12)
+listPadding.PaddingRight = UDim.new(0, 12)
+listPadding.PaddingTop = UDim.new(0, 12)
+listPadding.PaddingBottom = UDim.new(0, 12)
+
+-- Play Frame
+local PlayFrame = Instance.new("Frame", ContentFrame)
+PlayFrame.Size = UDim2.new(1, 0, 1, 0)
+PlayFrame.Position = UDim2.new(0, 0, 0, 0)
+PlayFrame.Visible = false
+PlayFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+PlayFrame.BorderSizePixel = 0
+
+local playFrameCorner = Instance.new("UICorner")
+playFrameCorner.CornerRadius = UDim.new(0, 6)
+playFrameCorner.Parent = PlayFrame
+
+local playPadding = Instance.new("UIPadding", PlayFrame)
+playPadding.PaddingLeft = UDim.new(0, 16)
+playPadding.PaddingRight = UDim.new(0, 16)
+playPadding.PaddingTop = UDim.new(0, 16)
+playPadding.PaddingBottom = UDim.new(0, 16)
+
+-- TextBox for Animation ID
+local TextBox = Instance.new("TextBox", PlayFrame)
+TextBox.Size = UDim2.new(1, 0, 0, 46)
+TextBox.Position = UDim2.new(0, 0, 0, 0)
+TextBox.PlaceholderText = "Enter Animation ID"
+TextBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+TextBox.BorderSizePixel = 0
+TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+TextBox.TextSize = 12
+TextBox.Font = Enum.Font.Code
+TextBox.ClearTextOnFocus = false
+
+local textBoxCorner = Instance.new("UICorner")
+textBoxCorner.CornerRadius = UDim.new(0, 6)
+textBoxCorner.Parent = TextBox
+
+local textBoxPadding = Instance.new("UIPadding", TextBox)
+textBoxPadding.PaddingLeft = UDim.new(0, 12)
+textBoxPadding.PaddingRight = UDim.new(0, 12)
+
+-- Button creation function
+local function createActionButton(name, text, yPosition, parent)
+    local button = Instance.new("TextButton", parent)
+    button.Name = name
+    button.Size = UDim2.new(1, 0, 0, 46)
+    button.Position = UDim2.new(0, 0, 0, yPosition)
+    button.Text = text
+    button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    button.BorderSizePixel = 0
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = 12
+    button.Font = Enum.Font.GothamMedium
+    button.AutoButtonColor = false
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = button
+    
+    button.MouseEnter:Connect(function()
+        button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+    end)
+    
+    button.MouseLeave:Connect(function()
+        button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    end)
+    
+    button.MouseButton1Down:Connect(function()
+        button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    end)
+    
+    button.MouseButton1Up:Connect(function()
+        button.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+    end)
+    
+    return button
+end
+
+-- Play Button (62 pixels from textbox + 12 spacing = 58)
+local PlayButton = createActionButton("PlayButton", "Play Animation", 58, PlayFrame)
+
+-- Loop Toggle (58 + 46 + 12 = 116)
+local LoopToggle = createActionButton("LoopToggle", "Loop: OFF", 116, PlayFrame)
+local isLooping = false
+
+-- Freeze Toggle (116 + 46 + 12 = 174)
+local FreezeToggle = createActionButton("FreezeToggle", "Freeze: OFF", 174, PlayFrame)
+local isFrozen = false
+local frozenTime = 0
+
+-- Stop Button (174 + 46 + 12 = 232)
+local StopButton = createActionButton("StopButton", "Stop Animation", 232, PlayFrame)
+StopButton.BackgroundColor3 = Color3.fromRGB(60, 30, 30)
+
+StopButton.MouseEnter:Connect(function()
+    StopButton.BackgroundColor3 = Color3.fromRGB(80, 40, 40)
+end)
+
+StopButton.MouseLeave:Connect(function()
+    StopButton.BackgroundColor3 = Color3.fromRGB(60, 30, 30)
+end)
+
+-- Tab switching
+LogTab.MouseButton1Click:Connect(function()
+    LogContainer.Visible = true
+    PlayFrame.Visible = false
+    LogTab.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    LogTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LogTab.Font = Enum.Font.GothamBold
+    PlayTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    PlayTab.TextColor3 = Color3.fromRGB(160, 160, 160)
+    PlayTab.Font = Enum.Font.Gotham
+end)
+
+PlayTab.MouseButton1Click:Connect(function()
+    LogContainer.Visible = false
+    PlayFrame.Visible = true
+    PlayTab.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    PlayTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PlayTab.Font = Enum.Font.GothamBold
+    LogTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    LogTab.TextColor3 = Color3.fromRGB(160, 160, 160)
+    LogTab.Font = Enum.Font.Gotham
+end)
+
+-- Refresh button functionality (clear all logs)
+RefreshButton.MouseButton1Click:Connect(function()
+    for _, child in pairs(LogFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    LogFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+end)
+
+-- Animation logging function
+local function logAnimation(animId)
+    local formattedId = "rbxassetid://" .. animId:match("%d+")
+
+    for _, child in pairs(LogFrame:GetChildren()) do
+        if child:IsA("Frame") and child:FindFirstChild("Label") then
+            if child.Label.Text == formattedId then
+                return
+            end
+        end
+    end
+
+    local AnimRow = Instance.new("Frame", LogFrame)
+    AnimRow.Size = UDim2.new(1, -10, 0, 46)
+    AnimRow.BackgroundTransparency = 1
+
+    local Label = Instance.new("TextLabel", AnimRow)
+    Label.Name = "Label"
+    Label.Size = UDim2.new(0.7, -6, 1, 0)
+    Label.Text = formattedId
+    Label.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Label.BorderSizePixel = 0
+    Label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    Label.TextSize = 11
+    Label.Font = Enum.Font.Code
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local labelCorner = Instance.new("UICorner")
+    labelCorner.CornerRadius = UDim.new(0, 6)
+    labelCorner.Parent = Label
+    
+    local labelPadding = Instance.new("UIPadding", Label)
+    labelPadding.PaddingLeft = UDim.new(0, 12)
+    labelPadding.PaddingRight = UDim.new(0, 8)
+
+    local CopyButton = Instance.new("TextButton", AnimRow)
+    CopyButton.Size = UDim2.new(0.3, -6, 1, 0)
+    CopyButton.Position = UDim2.new(0.7, 6, 0, 0)
+    CopyButton.Text = "Copy"
+    CopyButton.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
+    CopyButton.BorderSizePixel = 0
+    CopyButton.TextColor3 = Color3.fromRGB(180, 180, 180)
+    CopyButton.TextSize = 11
+    CopyButton.Font = Enum.Font.GothamMedium
+    CopyButton.AutoButtonColor = false
+    
+    local copyCorner = Instance.new("UICorner")
+    copyCorner.CornerRadius = UDim.new(0, 6)
+    copyCorner.Parent = CopyButton
+    
+    CopyButton.MouseEnter:Connect(function()
+        CopyButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        CopyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end)
+    
+    CopyButton.MouseLeave:Connect(function()
+        CopyButton.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
+        CopyButton.TextColor3 = Color3.fromRGB(180, 180, 180)
+    end)
+
+    CopyButton.MouseButton1Click:Connect(function()
+        setclipboard(formattedId)
+        CopyButton.Text = "Copied!"
+        CopyButton.TextColor3 = Color3.fromRGB(150, 255, 150)
+        wait(1.5)
+        CopyButton.Text = "Copy"
+        CopyButton.TextColor3 = Color3.fromRGB(180, 180, 180)
+    end)
+
+    LogFrame.CanvasSize = UDim2.new(0, 0, 0, UIList.AbsoluteContentSize.Y + 24)
+end
+
+-- Animation tracker
+if Animator then
+    Animator.AnimationPlayed:Connect(function(track)
+        if track and track.Animation then
+            logAnimation(track.Animation.AnimationId)
+        end
+    end)
+end
+
+-- Play button functionality
+local currentTrack
+PlayButton.MouseButton1Click:Connect(function()
+    local animId = TextBox.Text:match("%d+")
+    if animId then
+        local animation = Instance.new("Animation")
+        animation.AnimationId = "rbxassetid://" .. animId
+
+        currentTrack = Animator:LoadAnimation(animation)
+        currentTrack.Looped = isLooping
+        currentTrack:Play()
+    end
+end)
+
+-- Loop toggle
+LoopToggle.MouseButton1Click:Connect(function()
+    isLooping = not isLooping
+    LoopToggle.Text = "Loop: " .. (isLooping and "ON" or "OFF")
+end)
+
+-- Freeze toggle
+FreezeToggle.MouseButton1Click:Connect(function()
+    if currentTrack then
+        isFrozen = not isFrozen
+        FreezeToggle.Text = "Freeze: " .. (isFrozen and "ON" or "OFF")
+        
+        if isFrozen then
+            frozenTime = currentTrack.TimePosition
+            currentTrack:AdjustSpeed(0)
+        else
+            currentTrack:AdjustSpeed(1)
+            currentTrack.TimePosition = frozenTime
+        end
+    end
+end)
+
+-- Stop button
+StopButton.MouseButton1Click:Connect(function()
+    if currentTrack then
+        currentTrack:Stop()
+        isFrozen = false
+        FreezeToggle.Text = "Freeze: OFF"
+    end
+end)
+
+print("SPOOKALICIOUS V4 - Animation Logger loaded successfully!")
