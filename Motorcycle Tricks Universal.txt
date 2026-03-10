@@ -50,6 +50,8 @@ local activationKey = Enum.KeyCode.LeftControl
 local MOUSE_WHEEL_SENSITIVITY = 8
 local autoSwitchEnabled = false
 local backHopConnection = nil
+local savedMinZoom = player.CameraMinZoomDistance
+local savedMaxZoom = player.CameraMaxZoomDistance
 
 -- Mode settings
 local modeSettings = {
@@ -784,8 +786,19 @@ local function createGUI()
 	end
 
 	local mouseWheelToggle, getMouseWheel, setMouseWheel = createToggle("Mouse Wheel Angle", 5, false, function(newState)
-		mouseWheelControlEnabled = newState
-	end)
+    mouseWheelControlEnabled = newState
+    if newState then
+        savedMinZoom = player.CameraMinZoomDistance
+        savedMaxZoom = player.CameraMaxZoomDistance
+        local head = character and character:FindFirstChild("Head")
+        local camDist = (workspace.CurrentCamera.CFrame.Position - (head and head.Position or humanoidRootPart.Position)).Magnitude
+        player.CameraMinZoomDistance = camDist
+        player.CameraMaxZoomDistance = camDist
+    else
+        player.CameraMinZoomDistance = savedMinZoom
+        player.CameraMaxZoomDistance = savedMaxZoom
+    end
+end)
 	local autoSwitchToggle, getAutoSwitch, setAutoSwitch = createToggle("Alt Switch (Wheelie / Stoppie)", 6, false, function(newState)
 		autoSwitchEnabled = newState
 	end)
