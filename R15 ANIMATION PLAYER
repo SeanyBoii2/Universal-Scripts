@@ -1,0 +1,527 @@
+----------------------------------------------------------------------------------------------------------------------------
+
+if not game:IsLoaded() then game["Loaded"]:Wait() end
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+local players = game:GetService("Players")
+local localplayer = players["LocalPlayer"]
+local tweenservice = game:GetService("TweenService")
+local userinputservice = game:GetService("UserInputService")
+local runservice = game:GetService("RunService")
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+local function clik()
+	local s = Instance.new("Sound")
+	s["SoundId"] = "rbxassetid://87152549167464"
+	s["Parent"] = game["Workspace"]
+	s["Volume"] = 1.2
+	s["TimePosition"] = 0.1
+	s:Play()
+	game:GetService("Debris"):AddItem(s, 2)
+end
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+local gui = Instance.new("ScreenGui")
+gui["Name"] = "AnimationPlayer"
+if game["Run Service"]:IsStudio() then gui["Parent"] = localplayer:WaitForChild("PlayerGui") else gui["Parent"] = gethui and gethui() or game:GetService("CoreGui") end
+gui["ResetOnSpawn"] = false
+
+-- ── MAIN FRAME ──────────────────────────────────────────────────────────────
+
+local frame = Instance.new("Frame")
+frame["Size"] = UDim2.new(0, 260, 0, 220)
+frame["BackgroundColor3"] = Color3.fromRGB(18, 18, 22)
+frame["BorderSizePixel"] = 0
+frame["Parent"] = gui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner["CornerRadius"] = UDim.new(0, 8)
+frameCorner["Parent"] = frame
+
+local frameStroke = Instance.new("UIStroke")
+frameStroke["Color"] = Color3.fromRGB(45, 45, 55)
+frameStroke["Thickness"] = 1
+frameStroke["Parent"] = frame
+
+-- center on screen
+local function repos(ui, w, h)
+	local sw = workspace["CurrentCamera"]["ViewportSize"]["X"]
+	local sh = workspace["CurrentCamera"]["ViewportSize"]["Y"]
+	ui["Position"] = UDim2.new(0, (sw - w) / 2, 0, (sh - h) / 2 - 40)
+end
+repos(frame, 260, 220)
+
+-- ── DRAG ────────────────────────────────────────────────────────────────────
+
+task.spawn(function()
+	local dragging, dragStart, startPos
+
+	frame["InputBegan"]:Connect(function(input)
+		if input["UserInputType"] == Enum.UserInputType.MouseButton1 or input["UserInputType"] == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input["Position"]
+			startPos = frame["Position"]
+			input["Changed"]:Connect(function()
+				if input["UserInputState"] == Enum.UserInputState.End then dragging = false end
+			end)
+		end
+	end)
+
+	userinputservice["InputChanged"]:Connect(function(input)
+		if dragging and (input["UserInputType"] == Enum.UserInputType.MouseMovement or input["UserInputType"] == Enum.UserInputType.Touch) then
+			local delta = input["Position"] - dragStart
+			tweenservice:Create(frame, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				["Position"] = UDim2.new(startPos["X"]["Scale"], startPos["X"]["Offset"] + delta["X"], startPos["Y"]["Scale"], startPos["Y"]["Offset"] + delta["Y"])
+			}):Play()
+		end
+	end)
+end)
+
+-- ── TOP BAR ─────────────────────────────────────────────────────────────────
+
+local topbar = Instance.new("Frame")
+topbar["Size"] = UDim2.new(1, 0, 0, 26)
+topbar["BackgroundColor3"] = Color3.fromRGB(24, 24, 30)
+topbar["BorderSizePixel"] = 0
+topbar["Parent"] = frame
+
+local topCorner = Instance.new("UICorner")
+topCorner["CornerRadius"] = UDim.new(0, 8)
+topCorner["Parent"] = topbar
+
+-- bottom corners fix (fill the rounded bottom corners of topbar)
+local topFill = Instance.new("Frame")
+topFill["Size"] = UDim2.new(1, 0, 0, 8)
+topFill["Position"] = UDim2.new(0, 0, 1, -8)
+topFill["BackgroundColor3"] = Color3.fromRGB(24, 24, 30)
+topFill["BorderSizePixel"] = 0
+topFill["Parent"] = topbar
+
+local titlelabel = Instance.new("TextLabel")
+titlelabel["Size"] = UDim2.new(1, -90, 1, 0)
+titlelabel["Position"] = UDim2.new(0, 10, 0, 0)
+titlelabel["BackgroundTransparency"] = 1
+titlelabel["Text"] = "FE Anim Player"
+titlelabel["Font"] = Enum.Font.GothamBold
+titlelabel["TextXAlignment"] = Enum.TextXAlignment.Left
+titlelabel["TextColor3"] = Color3.fromRGB(220, 220, 230)
+titlelabel["TextSize"] = 12
+titlelabel["Parent"] = topbar
+
+local function maketopbutton(name, posX, w, color, text)
+	local btn = Instance.new("TextButton")
+	btn["Name"] = name
+	btn["Size"] = UDim2.new(0, w, 0, 16)
+	btn["Position"] = UDim2.new(1, posX, 0, 5)
+	btn["BackgroundColor3"] = color
+	btn["Text"] = text
+	btn["TextColor3"] = Color3.new(1, 1, 1)
+	btn["TextSize"] = 10
+	btn["Font"] = Enum.Font.GothamBold
+	btn["BorderSizePixel"] = 0
+	btn["Parent"] = topbar
+	local c = Instance.new("UICorner")
+	c["CornerRadius"] = UDim.new(0, 4)
+	c["Parent"] = btn
+	return btn
+end
+
+local stopallbutton = maketopbutton("StopAll", -88, 56, Color3.fromRGB(170, 40, 40), "Stop All")
+local minimizebutton = maketopbutton("Minimize", -28, 16, Color3.fromRGB(50, 50, 180), "–")
+local xbutton = maketopbutton("Close", -10, 16, Color3.fromRGB(170, 40, 40), "✕")
+
+-- fix x offset: these are from right edge
+stopallbutton["Position"] = UDim2.new(1, -90, 0, 5)
+minimizebutton["Position"] = UDim2.new(1, -30, 0, 5)
+xbutton["Position"] = UDim2.new(1, -12, 0, 5)
+
+-- ── SEARCH BAR ──────────────────────────────────────────────────────────────
+
+local searchbar = Instance.new("Frame")
+searchbar["Size"] = UDim2.new(1, -12, 0, 22)
+searchbar["Position"] = UDim2.new(0, 6, 0, 30)
+searchbar["BackgroundColor3"] = Color3.fromRGB(28, 28, 34)
+searchbar["BorderSizePixel"] = 0
+searchbar["Parent"] = frame
+
+local searchCorner = Instance.new("UICorner")
+searchCorner["CornerRadius"] = UDim.new(0, 5)
+searchCorner["Parent"] = searchbar
+
+local searchbox = Instance.new("TextBox")
+searchbox["Size"] = UDim2.new(1, -12, 1, 0)
+searchbox["Position"] = UDim2.new(0, 6, 0, 0)
+searchbox["BackgroundTransparency"] = 1
+searchbox["TextColor3"] = Color3.fromRGB(210, 210, 220)
+searchbox["PlaceholderText"] = "Search animations..."
+searchbox["PlaceholderColor3"] = Color3.fromRGB(90, 90, 100)
+searchbox["Text"] = ""
+searchbox["TextSize"] = 11
+searchbox["Font"] = Enum.Font.Gotham
+searchbox["TextXAlignment"] = Enum.TextXAlignment.Left
+searchbox["Parent"] = searchbar
+
+-- ── SCROLL AREA ─────────────────────────────────────────────────────────────
+
+local scrollframe = Instance.new("ScrollingFrame")
+scrollframe["Size"] = UDim2.new(1, -6, 1, -58)
+scrollframe["Position"] = UDim2.new(0, 3, 0, 56)
+scrollframe["CanvasSize"] = UDim2.new(0, 0, 0, 0)
+scrollframe["ScrollBarThickness"] = 3
+scrollframe["ScrollBarImageColor3"] = Color3.fromRGB(60, 60, 70)
+scrollframe["BorderSizePixel"] = 0
+scrollframe["BackgroundTransparency"] = 1
+scrollframe["Parent"] = frame
+
+local buttoncontainer = Instance.new("Frame")
+buttoncontainer["Size"] = UDim2.new(1, -4, 1, 0)
+buttoncontainer["Position"] = UDim2.new(0, 2, 0, 0)
+buttoncontainer["BackgroundTransparency"] = 1
+buttoncontainer["Parent"] = scrollframe
+
+local buttonlayout = Instance.new("UIGridLayout")
+buttonlayout["CellPadding"] = UDim2.new(0, 4, 0, 4)
+buttonlayout["CellSize"] = UDim2.new(0, 80, 0, 36)
+buttonlayout["SortOrder"] = Enum.SortOrder.LayoutOrder
+buttonlayout["Parent"] = buttoncontainer
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+local animations = {
+	{name = "Soda Pop", id = 105459130960429, speed = 1, timepos = 0, looped = true, freezeonend = false},
+	{name = "Assumptions", id = 91294374426630, speed = 1, timepos = 0, looped = true, freezeonend = false},
+	{name = "Silver Surfer", id = 100663712757148, speed = 0.8, timepos = 0, looped = true, freezeonend = false},
+	{name = "Float Lay", id = 77840765435893, speed = 1, timepos = 0, looped = true, freezeonend = false},
+	{name = "Slickback", id = 74288964113793, speed = 1, timepos = 0, looped = true, freezeonend = false},
+	{name = "Classic Walk", id = 107806791584829, speed = 1, timepos = 0, looped = true, freezeonend = false},
+	{name = "Sonic Pose", id = 129850521517715, speed = 1, timepos = 0, looped = true, freezeonend = false},
+	{name = "X-Step Shuffle", id = 135974351161463, speed = 1, timepos = 0, looped = true, freezeonend = false},
+	{name = "Jumpstyle", id = 133248139921782, speed = 1, timepos = 0, looped = true, freezeonend = false},
+	{name = "Jotaro Pose", id = 104330991197585, speed = 1, timepos = 0, looped = true, freezeonend = false},
+}
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+local active = {}
+local animateWasDisabled = false
+local keepStoppingConnection = nil
+local allButtons = {}            -- ordered list of button UI objects
+local currentGIndex = 0          -- 0 = nothing selected yet; first G press → 1
+local selectedButton = nil       -- reference to the currently green button
+
+local DEFAULT_BTN_COLOR = Color3.fromRGB(34, 34, 42)
+local HOVER_BTN_COLOR   = Color3.fromRGB(44, 44, 54)
+local ACTIVE_BTN_COLOR  = Color3.fromRGB(30, 140, 60)
+
+-------------------------------------------------------------------------------------------------------------------------------
+-- Resolve emote catalog IDs → real animation IDs
+-- Emote assets contain an Animation object inside; raw animation IDs just work directly.
+-------------------------------------------------------------------------------------------------------------------------------
+
+local resolvedCache = {}
+
+local function resolveAnimationId(assetId)
+	if resolvedCache[assetId] then return resolvedCache[assetId] end
+
+	local ok, objects = pcall(function()
+		return game:GetObjects("rbxassetid://" .. assetId)
+	end)
+
+	if ok and objects then
+		for _, obj in ipairs(objects) do
+			-- The emote asset itself might be an Animation
+			if obj:IsA("Animation") and obj.AnimationId ~= "" then
+				local realId = obj.AnimationId:match("%d+")
+				if realId then
+					resolvedCache[assetId] = realId
+					return realId
+				end
+			end
+			-- Or the Animation could be a child of the emote wrapper
+			for _, child in ipairs(obj:GetDescendants()) do
+				if child:IsA("Animation") and child.AnimationId ~= "" then
+					local realId = child.AnimationId:match("%d+")
+					if realId then
+						resolvedCache[assetId] = realId
+						return realId
+					end
+				end
+			end
+		end
+	end
+
+	-- Fallback: assume it's already a direct animation ID
+	resolvedCache[assetId] = tostring(assetId)
+	return tostring(assetId)
+end
+
+-- Pre-resolve all emote IDs in background so clicking is instant (no freeze)
+task.spawn(function()
+	for _, anim in ipairs(animations) do
+		resolveAnimationId(anim.id)
+		task.wait()  -- yield between each to avoid stutter
+	end
+end)
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+local function playAnimation(data)
+	if not localplayer.Character then return end
+	local humanoid = localplayer.Character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+
+	-- Stop our previously active custom animations
+	for _, track in pairs(active) do
+		if track then track:Stop(0) end
+	end
+	active = {}
+
+	-- Stop previous keep-stopping loop
+	if keepStoppingConnection then
+		keepStoppingConnection:Disconnect()
+		keepStoppingConnection = nil
+	end
+
+	-- Disable Animate LocalScript
+	local animateScript = localplayer.Character:FindFirstChild("Animate")
+	if animateScript then
+		animateScript.Disabled = true
+		animateWasDisabled = true
+	end
+
+	-- Stop every track instantly (twice to catch respawns)
+	for _, track in ipairs(animator:GetPlayingAnimationTracks()) do track:Stop(0) end
+	task.wait()
+	for _, track in ipairs(animator:GetPlayingAnimationTracks()) do track:Stop(0) end
+
+	-- Resolve the real animation ID (handles both raw anim IDs and emote catalog IDs)
+	local realId = resolveAnimationId(data.id)
+
+	-- Play our animation
+	local animation = Instance.new("Animation")
+	animation.AnimationId = "rbxassetid://" .. realId
+
+	local ourTrack = animator:LoadAnimation(animation)
+	ourTrack.Priority = Enum.AnimationPriority.Action4
+	ourTrack:Play(0)
+	ourTrack.Looped = data.looped
+	ourTrack.TimePosition = data.timepos
+	ourTrack:AdjustSpeed(data.speed)
+	ourTrack:AdjustWeight(999)
+
+	active[data.id] = ourTrack
+
+	-- Keep killing other tracks (throttled to avoid frame drops)
+	local killClock = 0
+	keepStoppingConnection = runservice.Heartbeat:Connect(function(dt)
+		if not ourTrack or not ourTrack.IsPlaying then
+			if keepStoppingConnection then
+				keepStoppingConnection:Disconnect()
+				keepStoppingConnection = nil
+			end
+			return
+		end
+		killClock = killClock + dt
+		if killClock < 0.2 then return end
+		killClock = 0
+		for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+			if track ~= ourTrack then track:Stop(0) end
+		end
+	end)
+end
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+local function highlightButton(btn)
+	-- Reset old selection
+	if selectedButton and selectedButton ~= btn then
+		selectedButton["BackgroundColor3"] = DEFAULT_BTN_COLOR
+	end
+	-- Set new selection green
+	if btn then
+		btn["BackgroundColor3"] = ACTIVE_BTN_COLOR
+	end
+	selectedButton = btn
+end
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+local function makebutton(data, index)
+	local button = Instance.new("TextButton")
+	button["Name"] = data.name
+	button["Size"] = UDim2.new(1, 0, 1, 0)
+	button["BackgroundColor3"] = DEFAULT_BTN_COLOR
+	button["Text"] = data.name
+	button["TextColor3"] = Color3.fromRGB(200, 200, 210)
+	button["TextSize"] = 10
+	button["TextWrapped"] = true
+	button["Font"] = Enum.Font.GothamSemibold
+	button["BorderSizePixel"] = 0
+	button["LayoutOrder"] = index
+	button["Parent"] = buttoncontainer
+
+	local corner = Instance.new("UICorner")
+	corner["CornerRadius"] = UDim.new(0, 5)
+	corner["Parent"] = button
+
+	-- hover effects (only when not the active/green button)
+	button["MouseEnter"]:Connect(function()
+		if button ~= selectedButton then
+			tweenservice:Create(button, TweenInfo.new(0.15), {["BackgroundColor3"] = HOVER_BTN_COLOR}):Play()
+		end
+	end)
+	button["MouseLeave"]:Connect(function()
+		if button ~= selectedButton then
+			tweenservice:Create(button, TweenInfo.new(0.15), {["BackgroundColor3"] = DEFAULT_BTN_COLOR}):Play()
+		end
+	end)
+
+	button["MouseButton1Click"]:Connect(function()
+		clik()
+		-- Update G-cycle index to match this button
+		currentGIndex = index
+		highlightButton(button)
+		playAnimation(data)
+	end)
+
+	allButtons[index] = button
+end
+
+for i, anim in ipairs(animations) do
+	makebutton(anim, i)
+end
+
+-------------------------------------------------------------------------------------------------------------------------------
+-- G KEY CYCLING
+-------------------------------------------------------------------------------------------------------------------------------
+
+userinputservice["InputBegan"]:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input["KeyCode"] == Enum.KeyCode.G then
+		if #animations == 0 then return end
+
+		-- Advance to next (or start at 1)
+		currentGIndex = currentGIndex + 1
+		if currentGIndex > #animations then
+			currentGIndex = 1
+		end
+
+		clik()
+		highlightButton(allButtons[currentGIndex])
+		playAnimation(animations[currentGIndex])
+
+		-- Scroll the button into view
+		local btn = allButtons[currentGIndex]
+		if btn then
+			local yPos = btn["AbsolutePosition"]["Y"] - buttoncontainer["AbsolutePosition"]["Y"]
+			scrollframe["CanvasPosition"] = Vector2.new(0, math.max(0, yPos - 40))
+		end
+	end
+end)
+
+-------------------------------------------------------------------------------------------------------------------------------
+-- SEARCH
+-------------------------------------------------------------------------------------------------------------------------------
+
+local function filteranims(input)
+	input = string.lower(input)
+	for i, button in pairs(allButtons) do
+		button.Visible = string.find(string.lower(button.Text), input, 1, true) ~= nil
+	end
+	task.wait()
+	scrollframe["CanvasSize"] = UDim2.new(0, 0, 0, buttonlayout["AbsoluteContentSize"]["Y"])
+end
+
+searchbox:GetPropertyChangedSignal("Text"):Connect(function()
+	filteranims(searchbox.Text)
+end)
+
+-------------------------------------------------------------------------------------------------------------------------------
+-- TOP BAR BUTTONS
+-------------------------------------------------------------------------------------------------------------------------------
+
+stopallbutton["MouseButton1Click"]:Connect(function()
+	clik()
+
+	if keepStoppingConnection then
+		keepStoppingConnection:Disconnect()
+		keepStoppingConnection = nil
+	end
+
+	for _, track in pairs(active) do
+		if track then track:Stop(0) end
+	end
+	active = {}
+
+	-- Reset highlight
+	if selectedButton then
+		selectedButton["BackgroundColor3"] = DEFAULT_BTN_COLOR
+		selectedButton = nil
+	end
+	currentGIndex = 0
+
+	if localplayer.Character then
+		local humanoid = localplayer.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			local animator = humanoid:FindFirstChildOfClass("Animator")
+			if animator then
+				for _, track in ipairs(animator:GetPlayingAnimationTracks()) do track:Stop(0) end
+			end
+		end
+		if animateWasDisabled then
+			local animateScript = localplayer.Character:FindFirstChild("Animate")
+			if animateScript then animateScript.Disabled = false end
+			animateWasDisabled = false
+		end
+	end
+end)
+
+xbutton["MouseButton1Click"]:Connect(function()
+	clik()
+	if keepStoppingConnection then
+		keepStoppingConnection:Disconnect()
+		keepStoppingConnection = nil
+	end
+	gui:Destroy()
+end)
+
+local isminimized = false
+local originalsize = frame["Size"]
+
+minimizebutton["MouseButton1Click"]:Connect(function()
+	clik()
+	isminimized = not isminimized
+	if isminimized then
+		minimizebutton["Text"] = "+"
+		tweenservice:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			["Size"] = UDim2.new(originalsize["X"]["Scale"], originalsize["X"]["Offset"], 0, 26)
+		}):Play()
+		scrollframe["Visible"] = false
+		searchbar["Visible"] = false
+	else
+		minimizebutton["Text"] = "–"
+		tweenservice:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			["Size"] = originalsize
+		}):Play()
+		scrollframe["Visible"] = true
+		searchbar["Visible"] = true
+	end
+end)
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+buttonlayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	buttoncontainer["Size"] = UDim2.new(1, -4, 0, buttonlayout["AbsoluteContentSize"]["Y"])
+	scrollframe["CanvasSize"] = UDim2.new(0, 0, 0, buttonlayout["AbsoluteContentSize"]["Y"])
+end)
+
+-------------------------------------------------------------------------------------------------------------------------------
